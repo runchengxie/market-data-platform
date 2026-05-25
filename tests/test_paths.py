@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from hk_data_platform.contract import build_current_contract
-from hk_data_platform.paths import (
+from market_data_platform.cli import main
+from market_data_platform.contract import build_current_contract, write_current_contract
+from market_data_platform.paths import (
     candidate_asset_paths,
     current_contract_path,
     dataset_registry_path,
     resolve_artifacts_root,
 )
-from hk_data_platform.registry import build_dataset_registry_rows, render_dataset_registry_csv
+from market_data_platform.registry import (
+    build_combined_dataset_registry_rows,
+    build_dataset_registry_rows,
+    render_combined_dataset_registry_csv,
+    render_dataset_registry_csv,
+)
 
 
 def test_shared_paths_resolve_from_explicit_root(tmp_path):
@@ -224,3 +230,44 @@ def test_cn_dataset_registry_uses_contract_market(tmp_path):
     assert daily["version"] == "20260522"
     assert daily["records"] == "12"
     assert "cn_current_contract" in csv_text
+
+
+def test_combined_dataset_registry_includes_hk_and_cn_contracts(tmp_path):
+    root = tmp_path / "market-data"
+    hk_contract = build_current_contract(root, market="hk", target_date="20260522")
+    cn_contract = build_current_contract(root, market="cn", target_date="20260522")
+
+    rows = build_combined_dataset_registry_rows([hk_contract, cn_contract])
+    csv_text = render_combined_dataset_registry_csv([hk_contract, cn_contract])
+
+    dataset_names = {row["dataset_name"] for row in rows}
+    assert "hk_current_contract" in dataset_names
+    assert "cn_current_contract" in dataset_names
+    assert "hk_daily" in dataset_names
+    assert "cn_daily" in dataset_names
+    assert "# Dataset Registry for current HK/CN research data assets." in csv_text
+
+
+def test_hk_data_platform_imports_remain_compatible(tmp_path):
+    from hk_data_platform.paths import current_contract_path as legacy_current_contract_path
+
+    root = tmp_path / "market-data"
+
+    assert legacy_current_contract_path(root, market="cn") == current_contract_path(
+        root,
+        market="cn",
+    )
+
+
+def test_cli_registry_build_combines_existing_market_contracts(tmp_path):
+    root = tmp_path / "market-data"
+    hk_contract = build_current_contract(root, market="hk", target_date="20260522")
+    cn_contract = build_current_contract(root, market="cn", target_date="20260522")
+    write_current_contract(current_contract_path(root, market="hk"), hk_contract)
+    write_current_contract(current_contract_path(root, market="cn"), cn_contract)
+
+    assert main(["registry", "build", "--artifacts-root", str(root)]) == 0
+
+    registry_text = dataset_registry_path(root).read_text(encoding="utf-8")
+    assert "hk_current_contract" in registry_text
+    assert "cn_current_contract" in registry_text

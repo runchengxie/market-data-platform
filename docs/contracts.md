@@ -7,15 +7,15 @@
 推荐的环境变量配置：
 
 ```bash
-export HK_DATA_PLATFORM_ROOT=/data/hk-data-platform
+export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-`HK_DATA_PLATFORM_ROOT` 是一个跨平台通用的环境变量，用于指定共享的港股（HK）数据输入路径。`CSTREE_ARTIFACTS_ROOT` 则用于覆盖策略的输出根目录；**仅当**下游项目需要将运行记录、缓存或报告等输出文件也写入该根目录时，才应使用此变量。
+`DATA_PLATFORM_ROOT` 是推荐使用的跨项目通用环境变量，用于指定共享市场数据输入路径。`HK_DATA_PLATFORM_ROOT` 仍作为旧 HK 调用方的兼容 fallback 保留。`CSTREE_ARTIFACTS_ROOT` 则用于覆盖策略的输出根目录；**仅当**下游项目需要将运行记录、缓存或报告等输出文件也写入该根目录时，才应使用此变量。
 
 ## 当前契约 (Current Contract)
 
 ```text
-<artifacts_root>/metadata/current_assets/hk_current.json
+<artifacts_root>/metadata/current_assets/<market>_current.json
 ```
 
 必需的顶层 JSON 结构：
@@ -26,7 +26,7 @@ export HK_DATA_PLATFORM_ROOT=/data/hk-data-platform
     "name": "hk_current",
     "market": "hk",
     "version": 1,
-    "artifacts_root": "/data/hk-data-platform",
+    "artifacts_root": "/data/market-data-platform",
     "target_date": "20260409"
   },
   "assets": {
@@ -43,12 +43,13 @@ export HK_DATA_PLATFORM_ROOT=/data/hk-data-platform
 可通过标准的数据资产别名（Asset Aliases）来生成该契约文件：
 
 ```bash
-hkdata contract build \
-  --artifacts-root "$HK_DATA_PLATFORM_ROOT" \
+marketdata contract build \
+  --market hk \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
   --target-date 20260409
 ```
 
-默认情况下，该命令会同时从同一份 current contract 生成
+默认情况下，该命令会同时合并已存在的 HK/CN current contracts 生成
 `metadata/dataset_registry.csv`。如只需写入 JSON 契约，可加 `--no-registry`。
 
 ## 数据资产键名 (Asset Keys)
@@ -78,19 +79,23 @@ hkdata contract build \
 | `universe_symbols` | `assets/universe/hk_all_full_symbols.txt` |
 | `universe_meta` | `assets/universe/hk_all_full_by_date.meta.yml` |
 
+CN 使用同一套 asset key 语义，但路径落在 `assets/rqdata/cn/...`，并额外预留
+`st_flags`、`suspend`、`limit_status`、`index_components`、`industry_citic`、
+`industry_sw`、`northbound` 等 A 股数据资产键。
+
 ## 数据集注册表 (Dataset Registry)
 
 ```text
 <artifacts_root>/metadata/dataset_registry.csv
 ```
 
-该注册表是一个专为人类阅读设计的精简索引文件，其内容由 `hk_current.json` 和各项数据资产的清单（Manifests）推导生成。它不应被视为数据的单一事实来源（Source of Truth）。
+该注册表是一个专为人类阅读设计的精简索引文件，其内容由 `hk_current.json` / `cn_current.json` 和各项数据资产的清单（Manifests）推导生成。它不应被视为数据的单一事实来源（Source of Truth）。
 
 也可以单独重建注册表：
 
 ```bash
-hkdata registry build \
-  --artifacts-root "$HK_DATA_PLATFORM_ROOT"
+marketdata registry build \
+  --artifacts-root "$DATA_PLATFORM_ROOT"
 ```
 
 ## 数据清单规范 (Manifest Rule)

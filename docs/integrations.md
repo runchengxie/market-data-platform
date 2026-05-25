@@ -4,26 +4,26 @@
 
 当前定位：
 * 负责策略研究、特征工程（features）、模型构建、回测、持仓管理及报告生成。
-* 仅作为已发布港股（HK）数据资产的下游只读调用方。
+* 仅作为已发布 HK / CN 数据资产的下游只读调用方。
 * 暂时负责维护多项数据处理命令，后续这些维护工作将统一迁移至本数据平台。
 
 环境配置：
 
 ```bash
-export HK_DATA_PLATFORM_ROOT=/data/hk-data-platform
+export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-这样配置可将策略的运行结果、缓存和报告输出保留在策略代码仓库本地，同时将港股的数据输入路径指向共享的数据根目录。请注意：仅当您希望将策略项目的默认输出也写入该数据平台根目录时，才需要将 `CSTREE_ARTIFACTS_ROOT` 或 `paths.artifacts_root` 指向平台根目录。
+这样配置可将策略的运行结果、缓存和报告输出保留在策略代码仓库本地，同时将市场数据输入路径指向共享的数据根目录。请注意：仅当您希望将策略项目的默认输出也写入该数据平台根目录时，才需要将 `CSTREE_ARTIFACTS_ROOT` 或 `paths.artifacts_root` 指向平台根目录。
 
 覆盖默认输出路径：
 
 ```yaml
 paths:
-  artifacts_root: "/data/hk-data-platform"
+  artifacts_root: "/data/market-data-platform"
 ```
 
 数据调用规范：
-* 推荐通过 `metadata/current_assets/hk_current.json` 结合各项资产的 manifest（清单文件）来读取数据。
+* 推荐通过 `metadata/current_assets/<market>_current.json` 结合各项资产的 manifest（清单文件）来读取数据。
 * 严禁直接依赖（或硬编码）其他项目的工作目录。
 * 运行低频策略时，请勿直接全量扫描原始的 Tick 级深度快照（tick-depth snapshots）数据。
 
@@ -51,18 +51,19 @@ reconcile 验收的正式交付目录。候选或分片资产可以先发布到
 操作示例：
 
 ```bash
-export HK_DATA_PLATFORM_ROOT=/data/hk-data-platform
+export DATA_PLATFORM_ROOT=/data/market-data-platform
 
 rqdata-hk-depth emit-asset \
   --kind daily \
   --source artifacts/cache/rqdata/hk_tick_depth_daily/core_20250401_20260409/data.parquet \
-  --output "$HK_DATA_PLATFORM_ROOT/assets/rqdata/hk/tick_depth_daily/core_20250401_20260409"
+  --output "$DATA_PLATFORM_ROOT/assets/rqdata/hk/tick_depth_daily/core_20250401_20260409"
 
 ln -sfn core_20250401_20260409 \
-  "$HK_DATA_PLATFORM_ROOT/assets/rqdata/hk/tick_depth_daily/hk_tick_depth_daily_latest"
+  "$DATA_PLATFORM_ROOT/assets/rqdata/hk/tick_depth_daily/hk_tick_depth_daily_latest"
 
-hkdata contract build \
-  --artifacts-root "$HK_DATA_PLATFORM_ROOT" \
+marketdata contract build \
+  --market hk \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
   --target-date 20260409
 ```
 

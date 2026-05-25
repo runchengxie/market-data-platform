@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hk-data-platform"
+name = "market-data-platform"
 version = "0.1.0"
-description = "Shared Hong Kong research data control plane contracts and helpers."
+description = "Shared multi-market research data control plane contracts and helpers."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,6 +20,7 @@ dev = [
 ]
 
 [project.scripts]
+marketdata = "market_data_platform.cli:main"
 hkdata = "hk_data_platform.cli:main"
 
 [tool.setuptools]
@@ -42,7 +43,7 @@ extend-exclude = [
 select = ["E", "F", "I", "UP", "B", "C4", "RET", "RUF100"]
 
 [tool.pyright]
-include = ["src/hk_data_platform"]
+include = ["src/market_data_platform", "src/hk_data_platform"]
 exclude = [".venv", "artifacts", "data", "reports"]
 venvPath = "."
 venv = ".venv"

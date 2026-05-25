@@ -24,6 +24,7 @@
 - 数据清单摘要 (manifest summary) 的辅助函数
 - 公用的数据健康度策略
 - 打包与发布流程的元数据规范
+- CN instruments / daily 的 RQData 镜像命令
 
 在下游调用方完全迁移完毕之前，暂时在 `cross-sectional-trees` 中保留兼容适配层 (compatibility wrappers)。
 
@@ -32,7 +33,7 @@
 `cross-sectional-trees` 项目未来应仅需依赖以下内容：
 
 - 数据产物根目录
-- `hk_current.json` 文件
+- `hk_current.json` / `cn_current.json` 文件
 - 已解析的资产路径 (resolved asset paths)
 - 数据资产清单 (asset manifests)
 

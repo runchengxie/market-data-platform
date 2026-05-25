@@ -1,5 +1,5 @@
-"""Shared Hong Kong data platform contracts and helpers."""
+"""Backward-compatible imports for the renamed market_data_platform package."""
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+from market_data_platform import __version__ as __version__
