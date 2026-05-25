@@ -1,28 +1,24 @@
-# Shared Contract
+# 共享数据契约 (Shared Contract)
 
-## Artifacts Root
+## 数据产物根目录 (Artifacts Root)
 
-The shared artifacts root is the storage boundary between data tooling and
-strategy repositories.
+共享的数据产物根目录，划分了数据工具（Data Tooling）与策略代码库（Strategy Repositories）之间的存储边界。
 
-Recommended environment variables:
+推荐的环境变量配置：
 
 ```bash
 export HK_DATA_PLATFORM_ROOT=/data/hk-data-platform
 ```
 
-`HK_DATA_PLATFORM_ROOT` is the platform-neutral variable for shared HK data
-inputs. `CSTREE_ARTIFACTS_ROOT` is a strategy output-root override; use it only
-when a downstream project should also write run/cache/report outputs to this
-root.
+`HK_DATA_PLATFORM_ROOT` 是一个跨平台通用的环境变量，用于指定共享的港股（HK）数据输入路径。`CSTREE_ARTIFACTS_ROOT` 则用于覆盖策略的输出根目录；**仅当**下游项目需要将运行记录、缓存或报告等输出文件也写入该根目录时，才应使用此变量。
 
-## Current Contract
+## 当前契约 (Current Contract)
 
 ```text
 <artifacts_root>/metadata/current_assets/hk_current.json
 ```
 
-Required top-level shape:
+必需的顶层 JSON 结构：
 
 ```json
 {
@@ -44,7 +40,7 @@ Required top-level shape:
 }
 ```
 
-Build it from the standard asset aliases:
+可通过标准的数据资产别名（Asset Aliases）来生成该契约文件：
 
 ```bash
 hkdata contract build \
@@ -52,9 +48,9 @@ hkdata contract build \
   --target-date 20260409
 ```
 
-## Asset Keys
+## 数据资产键名 (Asset Keys)
 
-| Asset key | Default path under artifacts root |
+| 资产键名 (Asset key) | 产物根目录下的默认路径 |
 | --- | --- |
 | `daily` | `assets/rqdata/hk/daily/hk_all_daily_latest` |
 | `daily_clean` | `assets/rqdata/hk/daily/hk_all_daily_clean_latest` |
@@ -70,18 +66,14 @@ hkdata contract build \
 | `universe_symbols` | `assets/universe/hk_all_full_symbols.txt` |
 | `universe_meta` | `assets/universe/hk_all_full_by_date.meta.yml` |
 
-## Dataset Registry
+## 数据集注册表 (Dataset Registry)
 
 ```text
 <artifacts_root>/metadata/dataset_registry.csv
 ```
 
-The registry is a compact human-facing index derived from `hk_current.json` and
-asset manifests. It is not the data source of truth.
+该注册表是一个专为人类阅读设计的精简索引文件，其内容由 `hk_current.json` 和各项数据资产的清单（Manifests）推导生成。它不应被视为数据的单一事实来源（Source of Truth）。
 
-## Manifest Rule
+## 数据清单规范 (Manifest Rule)
 
-Every published asset directory should contain a `manifest.yml` or an adjacent
-`*.manifest.yml` file for single-file assets. Manifests should expose enough
-fields for downstream code to summarize dataset, status, row count, symbol
-count, date range, and lineage.
+每一个正式发布的数据资产目录中，都必须包含一个 `manifest.yml` 文件；对于单文件形式的数据资产，则应在其同级目录下提供一个对应的 `*.manifest.yml` 文件。数据清单需要透出足够丰富的字段，以便下游代码能够快速获取该数据集的概况信息，包括：数据集状态、数据行数、标的代码（Symbol）数量、日期范围以及数据血缘（Lineage）。

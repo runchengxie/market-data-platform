@@ -1,16 +1,15 @@
-# HK Data Platform Docs
+# HK 数据平台文档
 
-Start here when using this repository as the shared HK data control plane.
+若需将本代码库作为 HK 共享数据控制面（Control Plane）使用，请由此开始阅读。
 
-## Pages
+## 文档导航
 
-| Topic | Page |
+| 主题内容 | 对应文档 |
 | --- | --- |
-| Shared path and asset key contract | `contracts.md` |
-| How existing projects should integrate | `integrations.md` |
-| Step-by-step migration order | `migration-plan.md` |
+| 共享路径与资产标识（Asset Key）数据契约 | `contracts.md` |
+| 存量项目接入指南 | `integrations.md` |
+| 分步迁移计划与执行顺序 | `migration-plan.md` |
 
-## Stage-1 Rule
+## 第一阶段（Stage-1）执行准则
 
-This repo currently defines the contract. The live data tooling still resides in
-`cross-sectional-trees` and `rqdata-hk-depth-snapshots`.
+目前，本代码库仅用于定义数据契约。生产环境的实际数据处理工具仍保留在 `cross-sectional-trees` 和 `rqdata-hk-depth-snapshots` 项目中。

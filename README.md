@@ -1,54 +1,44 @@
-# hk-data-platform
+# hk-data-platform (香港数据平台)
 
-Shared control plane for Hong Kong research data assets.
+香港研究数据资产的共享控制平面（Shared control plane）。
 
-This repository is the staging area for splitting reusable HK data management out
-of strategy repositories. It should own contracts, registry conventions, schema,
-health policy, packaging, and release workflows. Large data files stay outside
-Git.
+本仓库是一个过渡项目，旨在将可复用的香港数据管理逻辑从各个策略仓库中解耦并剥离出来。未来，本仓库将集中统管数据契约（Contracts）、注册表规范（Registry conventions）、数据模式（Schema）、数据健康度巡检策略（Health policy）以及数据的打包与发布工作流。请注意，大体量的数据文件不会被纳入 Git 版本控制。
 
-## Target Shape
+## 最终架构形态 (Target Shape)
 
 ```text
 hk-data-platform/
-  daily / PIT / valuation / industry / universe
-  intraday 5m
-  tick_depth raw / tick_depth_daily
-  execution_cost_model
-  current contract / dataset registry / health / reconcile / release
+  daily（日频数据） / PIT（Point-in-Time数据） / valuation（估值） / industry（行业分类） / universe（标的池）
+  intraday 5m（5分钟级日内数据）
+  tick_depth raw（原始逐笔深度） / tick_depth_daily（日频逐笔深度）
+  execution_cost_model（执行成本模型）
+  current contract（当前数据契约） / dataset registry（数据集注册表） / health（健康度巡检） / reconcile（数据对账） / release（发布）
 
 cross-sectional-trees/
-  strategy, features, models, backtests, holdings
-  read-only consumer of hk-data-platform
+  策略、特征、模型、回测、持仓
+  作为 hk-data-platform 的纯只读下游消费方
 
 rqdata-hk-depth-snapshots/
-  short term: independent tick-depth implementation
-  medium term: tick_depth module inside hk-data-platform
+  短期方案：独立的 tick-depth（逐笔深度）实现模块
+  中期方案：将其作为 tick_depth 模块整合进 hk-data-platform 中
 ```
 
-## Stage-1 Boundary
+## 第一阶段拆分边界 (Stage-1 Boundary)
 
-For now, this repo defines the shared contract and path conventions. The active
-implementation still lives in:
+目前，本仓库仅负责定义共享的数据契约和路径规范。具体的业务实现逻辑依然保留在以下项目中：
 
-- `cross-sectional-trees`: daily, PIT, valuation, industry, universe, current
-  contract, dataset registry, health, and release tooling.
-- `rqdata-hk-depth-snapshots`: tick-depth download, health, daily aggregation,
-  reconciliation, and packaging.
+- `cross-sectional-trees`：包含日频、PIT、估值、行业分类、标的池、当前数据契约、数据集注册表、数据健康度巡检及发布工具的实现。
+- `rqdata-hk-depth-snapshots`：包含逐笔深度数据的下载、健康度巡检、日频聚合、数据对账及打包逻辑。
 
-The first operational step is to point both projects at the same shared artifacts
-root:
+第一阶段的落地步骤是，将上述两个项目的数据输出指向同一个共享的产物根目录（Artifacts root）：
 
 ```bash
 export HK_DATA_PLATFORM_ROOT=/data/hk-data-platform
 ```
 
-`HK_DATA_PLATFORM_ROOT` is the neutral name for this repo. `CSTREE_ARTIFACTS_ROOT`
-is only needed when a project intentionally wants its run/cache/report outputs to
-move to the same root. Strategy repositories should normally keep their own
-output root and consume HK data through `HK_DATA_PLATFORM_ROOT`.
+`HK_DATA_PLATFORM_ROOT` 是为本仓库设定的统一定义的环境变量。只有当某个项目明确需要将其运行结果、缓存或报告等输出文件也集中放到该根目录下时，才需要使用 `CSTREE_ARTIFACTS_ROOT` 环境变量。通常情况下，各策略仓库应保持自己独立的输出目录，并统一通过 `HK_DATA_PLATFORM_ROOT` 来读取香港市场数据。
 
-## Shared Layout
+## 共享目录结构 (Shared Layout)
 
 ```text
 <artifacts_root>/
@@ -72,19 +62,17 @@ output root and consume HK data through `HK_DATA_PLATFORM_ROOT`.
   standardized/
 ```
 
-## Current Contract
+## 当前数据契约 (Current Contract)
 
-The shared current contract is:
+共享的当前数据契约文件路径为：
 
 ```text
 <artifacts_root>/metadata/current_assets/hk_current.json
 ```
 
-It records asset keys, alias paths, resolved paths, manifest summaries, and
-as-of dates. Strategy repositories should consume resolved assets from this
-contract instead of scanning mutable `latest` aliases.
+该文件记录了数据资产标识（asset keys）、别名路径（alias paths）、底层解析的绝对路径（resolved paths）、数据清单摘要（manifest summaries）以及数据业务日期（as-of dates）。各个策略仓库应当通过该契约文件来获取确定的底层数据路径进行读取，而不是通过扫描那些随时可能变动的 `latest` 别名目录来拉取数据。
 
-## Development
+## 本地开发 (Development)
 
 ```bash
 uv sync --extra dev
@@ -93,4 +81,4 @@ uv run ruff check .
 uv run pyright
 ```
 
-See `docs/README.md` for the contract and migration notes.
+关于数据契约的详细说明及迁移指南，请参阅 `docs/README.md`。
