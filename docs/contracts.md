@@ -48,6 +48,9 @@ hkdata contract build \
   --target-date 20260409
 ```
 
+默认情况下，该命令会同时从同一份 current contract 生成
+`metadata/dataset_registry.csv`。如只需写入 JSON 契约，可加 `--no-registry`。
+
 ## 数据资产键名 (Asset Keys)
 
 | 资产键名 (Asset key) | 产物根目录下的默认路径 |
@@ -58,9 +61,18 @@ hkdata contract build \
 | `tick_depth_raw` | `assets/rqdata/hk/tick_depth/hk_tick_depth_latest` |
 | `tick_depth_daily` | `assets/rqdata/hk/tick_depth_daily/hk_tick_depth_daily_latest` |
 | `execution_cost_model` | `assets/rqdata/hk/execution_cost/hk_execution_cost_model_latest` |
+| `etf_daily` | `assets/rqdata/hk/daily/hk_etf_daily_latest` |
+| `etf_daily_clean` | `assets/rqdata/hk/daily/hk_etf_daily_clean_latest` |
+| `etf_instruments` | `assets/rqdata/hk/instruments/hk_etf_instruments_latest.parquet` |
 | `valuation` | `assets/rqdata/hk/valuation/hk_all_valuation_latest` |
 | `instruments` | `assets/rqdata/hk/instruments/hk_all_instruments_latest.parquet` |
 | `pit` | `assets/rqdata/hk/pit_financials/hk_all_2000_2025_full_market_latest` |
+| `ex_factors` | `assets/rqdata/hk/ex_factors/hk_all_ex_factors_latest` |
+| `dividends` | `assets/rqdata/hk/dividends/hk_all_dividends_latest` |
+| `shares` | `assets/rqdata/hk/shares/hk_all_shares_latest` |
+| `exchange_rate` | `assets/rqdata/hk/exchange_rate/hk_exchange_rate_latest` |
+| `southbound` | `assets/rqdata/hk/southbound/hk_connect_southbound_latest` |
+| `financial_details` | `assets/rqdata/hk/financial_details/hk_financial_details_latest` |
 | `industry_changes` | `assets/rqdata/hk/industry_changes/hk_all_industry_changes_latest` |
 | `universe_by_date` | `assets/universe/hk_all_full_by_date.csv` |
 | `universe_symbols` | `assets/universe/hk_all_full_symbols.txt` |
@@ -73,6 +85,13 @@ hkdata contract build \
 ```
 
 该注册表是一个专为人类阅读设计的精简索引文件，其内容由 `hk_current.json` 和各项数据资产的清单（Manifests）推导生成。它不应被视为数据的单一事实来源（Source of Truth）。
+
+也可以单独重建注册表：
+
+```bash
+hkdata registry build \
+  --artifacts-root "$HK_DATA_PLATFORM_ROOT"
+```
 
 ## 数据清单规范 (Manifest Rule)
 

@@ -43,6 +43,11 @@ paths:
 
 在发布正式的数据快照后，请务必更新或重新生成 `hk_current.json` 文件，以确保 `tick_depth_raw` 和 `tick_depth_daily` 字段正确指向最新采纳的数据资产。
 
+不要将混合的 cache 目录、增量碎片目录或带 `_partial` 标记的聚合结果直接挂到
+`hk_tick_depth_daily_latest`。该 latest alias 只能指向完整、去重并通过 health /
+reconcile 验收的正式交付目录。候选或分片资产可以先发布到
+`assets/rqdata/hk/tick_depth_daily/<snapshot>/` 下，但不要更新 current alias。
+
 操作示例：
 
 ```bash

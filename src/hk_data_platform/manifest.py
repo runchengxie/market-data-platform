@@ -33,13 +33,42 @@ def load_manifest_summary(path: str | Path) -> dict[str, Any]:
     symbol_count = payload.get("symbol_count")
     if symbol_count is not None and str(symbol_count).isdigit():
         totals.setdefault("symbols", int(symbol_count))
+    files = payload.get("files")
+    if isinstance(files, list):
+        totals.setdefault("files", len(files))
+
+    output_dir = str(payload.get("output_dir") or "").strip()
+    if not output_dir and payload.get("source_path") is not None:
+        output_dir = str(manifest_path.parent)
+
+    query_start_date = None
+    for key in ("start_date", "start", "from"):
+        value = query.get(key)
+        if value is not None:
+            query_start_date = str(value).strip() or None
+            if query_start_date:
+                break
+    if not query_start_date:
+        query_start_date = date_range.get("start")
+
+    query_end_date = None
+    for key in ("end_date", "date", "mapping_date", "as_of_date"):
+        value = query.get(key)
+        if value is not None:
+            query_end_date = str(value).strip() or None
+            if query_end_date:
+                break
+    if not query_end_date:
+        query_end_date = date_range.get("end")
 
     return {
         "manifest_path": str(manifest_path),
         "dataset": dataset,
         "schema_version": schema_version or None,
         "status": str(payload.get("status") or "").strip() or None,
-        "query_start_date": query.get("start_date") or date_range.get("start"),
-        "query_end_date": query.get("end_date") or date_range.get("end"),
+        "output_dir": output_dir or None,
+        "snapshot_name": Path(output_dir).name if output_dir else manifest_path.parent.name,
+        "query_start_date": query_start_date,
+        "query_end_date": query_end_date,
         "totals": totals,
     }

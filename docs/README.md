@@ -10,6 +10,6 @@
 | 存量项目接入指南 | `integrations.md` |
 | 分步迁移计划与执行顺序 | `migration-plan.md` |
 
-## 第一阶段（Stage-1）执行准则
+## 当前执行准则
 
-目前，本代码库仅用于定义数据契约。生产环境的实际数据处理工具仍保留在 `cross-sectional-trees` 和 `rqdata-hk-depth-snapshots` 项目中。
+当前本代码库负责共享路径、资产键、current contract 和 dataset registry 等控制面能力。生产环境的数据下载、清洗、对账和打包工具仍保留在 `cross-sectional-trees` 和 `rqdata-hk-depth-snapshots` 项目中，并会分批迁移。
