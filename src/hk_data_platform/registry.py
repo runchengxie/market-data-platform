@@ -22,31 +22,43 @@ DATASET_REGISTRY_COLUMNS = (
 )
 
 DATASET_REGISTRY_DESCRIPTIONS = {
-    "current_contract": "current HK asset contract with resolved aliases and manifest summaries",
-    "daily": "current HK raw daily OHLCV asset",
-    "daily_clean": "current HK daily clean layer",
-    "intraday": "current HK intraday 5m asset",
-    "tick_depth_raw": "current HK raw 10-level tick depth snapshot asset",
-    "tick_depth_daily": "current HK daily aggregate derived from 10-level tick depth snapshots",
-    "execution_cost_model": (
-        "current HK execution cost model calibrated from market microstructure assets"
+    "current_contract": (
+        "current {market_label} asset contract with resolved aliases and manifest summaries"
     ),
-    "etf_daily": "current HK ETF raw daily asset",
-    "etf_daily_clean": "current HK ETF daily clean layer",
-    "etf_instruments": "current HK ETF instrument master",
-    "valuation": "current HK valuation factors",
-    "instruments": "current HK instrument master",
-    "pit": "current HK PIT fundamentals asset",
-    "ex_factors": "current HK ex-factor events",
-    "dividends": "current HK dividend events",
-    "shares": "current HK share capital events",
-    "exchange_rate": "current HK exchange-rate reference asset",
-    "southbound": "current HK Connect southbound eligibility asset",
-    "financial_details": "current HK financial details asset",
-    "industry_changes": "current HK industry membership changes",
-    "universe_by_date": "current HK full-market universe by date",
-    "universe_symbols": "current HK latest full-market universe symbols",
-    "universe_meta": "current HK universe build metadata",
+    "daily": "current {market_label} raw daily OHLCV asset",
+    "daily_clean": "current {market_label} daily clean layer",
+    "intraday": "current {market_label} intraday 5m asset",
+    "tick_depth_raw": "current {market_label} raw 10-level tick depth snapshot asset",
+    "tick_depth_daily": (
+        "current {market_label} daily aggregate derived from 10-level tick depth snapshots"
+    ),
+    "execution_cost_model": (
+        "current {market_label} execution cost model calibrated from market microstructure assets"
+    ),
+    "etf_daily": "current {market_label} ETF raw daily asset",
+    "etf_daily_clean": "current {market_label} ETF daily clean layer",
+    "etf_instruments": "current {market_label} ETF instrument master",
+    "valuation": "current {market_label} valuation factors",
+    "instruments": "current {market_label} instrument master",
+    "pit": "current {market_label} PIT fundamentals asset",
+    "ex_factors": "current {market_label} ex-factor events",
+    "dividends": "current {market_label} dividend events",
+    "shares": "current {market_label} share capital events",
+    "exchange_rate": "current {market_label} exchange-rate reference asset",
+    "southbound": "current {market_label} Connect southbound eligibility asset",
+    "financial_details": "current {market_label} financial details asset",
+    "industry_changes": "current {market_label} industry membership changes",
+    "industry": "current {market_label} industry labels",
+    "industry_citic": "current {market_label} CITIC industry labels",
+    "industry_sw": "current {market_label} Shenwan industry labels",
+    "st_flags": "current {market_label} ST flag history",
+    "suspend": "current {market_label} suspension history",
+    "limit_status": "current {market_label} limit-up/limit-down status history",
+    "index_components": "current {market_label} index component history",
+    "northbound": "current {market_label} northbound reference asset",
+    "universe_by_date": "current {market_label} full-market universe by date",
+    "universe_symbols": "current {market_label} latest full-market universe symbols",
+    "universe_meta": "current {market_label} universe build metadata",
 }
 
 DATASET_REGISTRY_SOURCES = {
@@ -60,6 +72,11 @@ DATASET_REGISTRY_SOURCES = {
     "instruments": "rqdata",
     "etf_instruments": "rqdata",
     "tick_depth_raw": "rqdata",
+    "st_flags": "rqdata",
+    "suspend": "rqdata",
+    "limit_status": "rqdata",
+    "index_components": "rqdata",
+    "northbound": "rqdata",
 }
 
 
@@ -120,25 +137,39 @@ def _registry_date_range(entry: Mapping[str, Any]) -> str:
     return ""
 
 
+def _market_label(market: str) -> str:
+    return market.upper()
+
+
+def _registry_description(asset_key: str, market: str) -> str:
+    template = DATASET_REGISTRY_DESCRIPTIONS.get(
+        asset_key,
+        "current {market_label} {asset_key} asset",
+    )
+    return template.format(market_label=_market_label(market), asset_key=asset_key)
+
+
 def build_dataset_registry_rows(contract: Mapping[str, Any]) -> list[dict[str, str]]:
     contract_meta = _mapping(contract.get("contract"))
     target_date = str(contract_meta.get("target_date") or "").strip()
     assets = _mapping(contract.get("assets"))
     artifacts_root = Path(str(contract_meta.get("artifacts_root") or "artifacts")).resolve()
     contract_path = str(contract_meta.get("contract_path") or "").strip()
+    market = str(contract_meta.get("market") or "hk").strip().lower() or "hk"
+    contract_name = str(contract_meta.get("name") or f"{market}_current").strip()
     rows: list[dict[str, str]] = []
     if contract_path:
         rows.append(
             {
-                "dataset_name": "hk_current_contract",
+                "dataset_name": f"{contract_name}_contract",
                 "version": target_date,
-                "market": "hk",
+                "market": market,
                 "type": "metadata",
                 "date_range": f"as of {_registry_date(target_date)}" if target_date else "",
                 "source": "local",
                 "records": f"{len(assets)} assets",
                 "symbols": str(len(assets)),
-                "description": DATASET_REGISTRY_DESCRIPTIONS["current_contract"],
+                "description": _registry_description("current_contract", market),
                 "path": _registry_path(contract_path, artifacts_root=artifacts_root),
             }
         )
@@ -154,9 +185,9 @@ def build_dataset_registry_rows(contract: Mapping[str, Any]) -> list[dict[str, s
         version = re.sub(r"\D", "", as_of) or target_date
         rows.append(
             {
-                "dataset_name": f"hk_{asset_key}",
+                "dataset_name": f"{market}_{asset_key}",
                 "version": version,
-                "market": "hk",
+                "market": market,
                 "type": str(asset_key),
                 "date_range": _registry_date_range(entry),
                 "source": DATASET_REGISTRY_SOURCES.get(
@@ -165,10 +196,7 @@ def build_dataset_registry_rows(contract: Mapping[str, Any]) -> list[dict[str, s
                 ),
                 "records": _registry_records_text(raw_entry),
                 "symbols": _registry_symbols_text(raw_entry),
-                "description": DATASET_REGISTRY_DESCRIPTIONS.get(
-                    str(asset_key),
-                    f"current HK {asset_key} asset",
-                ),
+                "description": _registry_description(str(asset_key), market),
                 "path": _registry_path(resolved_path, artifacts_root=artifacts_root),
             }
         )
@@ -181,11 +209,14 @@ def render_dataset_registry_csv(
     generated_at: datetime | None = None,
 ) -> str:
     generated = generated_at or datetime.now().astimezone()
+    contract_meta = _mapping(contract.get("contract"))
+    market = str(contract_meta.get("market") or "hk").strip().lower() or "hk"
+    contract_name = str(contract_meta.get("name") or f"{market}_current").strip()
     buffer = io.StringIO()
-    buffer.write("# Dataset Registry for current HK research data assets.\n")
+    buffer.write(f"# Dataset Registry for current {_market_label(market)} research data assets.\n")
     buffer.write(
-        "# Auto-generated from artifacts/metadata/current_assets/hk_current.json; "
-        "prefer hk_current.json plus each asset manifest for source-of-truth freshness.\n"
+        f"# Auto-generated from artifacts/metadata/current_assets/{contract_name}.json; "
+        f"prefer {contract_name}.json plus each asset manifest for source-of-truth freshness.\n"
     )
     buffer.write(f"# Last updated: {generated.date().isoformat()}\n")
     writer = csv.writer(buffer, lineterminator="\n")

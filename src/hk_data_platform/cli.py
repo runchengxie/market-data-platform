@@ -17,6 +17,7 @@ from hk_data_platform.registry import render_dataset_registry_csv, write_dataset
 def _add_paths_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("paths", help="Print shared HK data platform paths.")
     parser.add_argument("--artifacts-root")
+    parser.add_argument("--market", default="hk", choices=["hk", "cn"])
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
 
@@ -28,11 +29,12 @@ def _add_contract_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Build hk_current.json from standard paths.",
     )
     build.add_argument("--artifacts-root")
+    build.add_argument("--market", default="hk", choices=["hk", "cn"])
     build.add_argument("--target-date")
     build.add_argument("--generated-by", default="hkdata contract build")
     build.add_argument(
         "--out",
-        help="Default: <artifacts-root>/metadata/current_assets/hk_current.json",
+        help="Default: <artifacts-root>/metadata/current_assets/<market>_current.json",
     )
     build.add_argument(
         "--registry-out",
@@ -58,9 +60,10 @@ def _add_registry_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Build dataset_registry.csv from hk_current.json.",
     )
     build.add_argument("--artifacts-root")
+    build.add_argument("--market", default="hk", choices=["hk", "cn"])
     build.add_argument(
         "--contract",
-        help="Default: <artifacts-root>/metadata/current_assets/hk_current.json",
+        help="Default: <artifacts-root>/metadata/current_assets/<market>_current.json",
     )
     build.add_argument(
         "--out",
@@ -86,9 +89,13 @@ def _handle_paths(args: argparse.Namespace) -> int:
     root = resolve_artifacts_root(args.artifacts_root)
     payload = {
         "artifacts_root": str(root),
-        "current_contract": str(current_contract_path(root)),
+        "market": args.market,
+        "current_contract": str(current_contract_path(root, market=args.market)),
         "dataset_registry": str(dataset_registry_path(root)),
-        "assets": {key: str(path) for key, path in candidate_asset_paths(root).items()},
+        "assets": {
+            key: str(path)
+            for key, path in candidate_asset_paths(root, market=args.market).items()
+        },
     }
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -103,7 +110,7 @@ def _handle_paths(args: argparse.Namespace) -> int:
 
 def _handle_contract_build(args: argparse.Namespace) -> int:
     root = resolve_artifacts_root(args.artifacts_root)
-    output = current_contract_path(root)
+    output = current_contract_path(root, market=args.market)
     if args.out is not None:
         output = Path(args.out).expanduser().resolve()
     registry_output = dataset_registry_path(root)
@@ -111,6 +118,7 @@ def _handle_contract_build(args: argparse.Namespace) -> int:
         registry_output = Path(args.registry_out).expanduser().resolve()
     payload = build_current_contract(
         root,
+        market=args.market,
         generated_by=args.generated_by,
         target_date=args.target_date,
     )
@@ -134,7 +142,7 @@ def _load_contract(path: Path) -> dict[str, object]:
 
 def _handle_registry_build(args: argparse.Namespace) -> int:
     root = resolve_artifacts_root(args.artifacts_root)
-    contract_path = current_contract_path(root)
+    contract_path = current_contract_path(root, market=args.market)
     if args.contract is not None:
         contract_path = Path(args.contract).expanduser().resolve()
     output = dataset_registry_path(root)

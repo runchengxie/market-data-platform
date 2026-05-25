@@ -46,6 +46,38 @@ def test_shared_paths_resolve_from_explicit_root(tmp_path):
     assert len(assets) == 22
 
 
+def test_cn_paths_and_contract_use_market_specific_layout(tmp_path):
+    root = tmp_path / "market-data"
+
+    assert (
+        current_contract_path(root, market="cn")
+        == root.resolve() / "metadata" / "current_assets" / "cn_current.json"
+    )
+
+    assets = candidate_asset_paths(root, market="cn")
+    assert (
+        assets["daily_clean"]
+        == root.resolve() / "assets" / "rqdata" / "cn" / "daily" / "cn_all_daily_clean_latest"
+    )
+    assert (
+        assets["instruments"]
+        == root.resolve()
+        / "assets"
+        / "rqdata"
+        / "cn"
+        / "instruments"
+        / "cn_all_instruments_latest.parquet"
+    )
+    assert assets["st_flags"].name == "cn_st_flags_latest"
+    assert assets["limit_status"].name == "cn_limit_status_latest"
+
+    contract = build_current_contract(root, market="cn", target_date="20260522")
+    assert contract["contract"]["name"] == "cn_current"
+    assert contract["contract"]["market"] == "cn"
+    assert contract["contract"]["contract_path"].endswith("metadata/current_assets/cn_current.json")
+    assert "daily_clean" in contract["assets"]
+
+
 def test_build_current_contract_reads_tick_depth_manifest(tmp_path):
     root = tmp_path / "hk-data"
     snapshot = (
@@ -158,3 +190,37 @@ def test_current_contract_uses_query_date_as_as_of(tmp_path):
     assert entry["as_of"] == "20260522"
     assert financial_details["version"] == "20260522"
     assert financial_details["date_range"] == "as of 2026-05-22"
+
+
+def test_cn_dataset_registry_uses_contract_market(tmp_path):
+    root = tmp_path / "market-data"
+    snapshot = root / "assets" / "rqdata" / "cn" / "daily" / "cn_all_20260522_daily"
+    snapshot.mkdir(parents=True)
+    (snapshot / "manifest.yml").write_text(
+        "\n".join(
+            [
+                "dataset: daily",
+                "status: completed",
+                "query:",
+                "  start_date: '20240101'",
+                "  end_date: '20260522'",
+                "totals:",
+                "  rows: 12",
+                "  symbols_written: 3",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    alias = candidate_asset_paths(root, market="cn")["daily"]
+    alias.parent.mkdir(parents=True, exist_ok=True)
+    alias.symlink_to(snapshot.name)
+
+    contract = build_current_contract(root, market="cn", target_date="20260522")
+    rows = build_dataset_registry_rows(contract)
+    csv_text = render_dataset_registry_csv(contract)
+
+    daily = next(row for row in rows if row["dataset_name"] == "cn_daily")
+    assert daily["market"] == "cn"
+    assert daily["version"] == "20260522"
+    assert daily["records"] == "12"
+    assert "cn_current_contract" in csv_text

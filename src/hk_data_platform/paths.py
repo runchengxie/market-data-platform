@@ -3,13 +3,30 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+DATA_PLATFORM_ROOT_ENV = "DATA_PLATFORM_ROOT"
 HK_DATA_PLATFORM_ROOT_ENV = "HK_DATA_PLATFORM_ROOT"
 CSTREE_ARTIFACTS_ROOT_ENV = "CSTREE_ARTIFACTS_ROOT"
 
-CURRENT_CONTRACT_RELATIVE_PATH = Path("metadata") / "current_assets" / "hk_current.json"
+SUPPORTED_MARKETS = {"hk", "cn"}
+
+
+def normalize_market(market: str | None = None) -> str:
+    value = str(market or "hk").strip().lower()
+    if value not in SUPPORTED_MARKETS:
+        supported = ", ".join(sorted(SUPPORTED_MARKETS))
+        raise ValueError(f"Unsupported market '{value}'. Supported markets: {supported}.")
+    return value
+
+
+def current_contract_relative_path(market: str | None = None) -> Path:
+    market = normalize_market(market)
+    return Path("metadata") / "current_assets" / f"{market}_current.json"
+
+
+CURRENT_CONTRACT_RELATIVE_PATH = current_contract_relative_path("hk")
 DATASET_REGISTRY_RELATIVE_PATH = Path("metadata") / "dataset_registry.csv"
 
-ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
+HK_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
     "daily": ("assets", "rqdata", "hk", "daily", "hk_all_daily_latest"),
     "daily_clean": ("assets", "rqdata", "hk", "daily", "hk_all_daily_clean_latest"),
     "intraday": ("assets", "rqdata", "hk", "intraday", "hk_intraday_latest"),
@@ -70,26 +87,79 @@ ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
     "universe_meta": ("assets", "universe", "hk_all_full_by_date.meta.yml"),
 }
 
+CN_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
+    "daily": ("assets", "rqdata", "cn", "daily", "cn_all_daily_latest"),
+    "daily_clean": ("assets", "rqdata", "cn", "daily", "cn_all_daily_clean_latest"),
+    "valuation": ("assets", "rqdata", "cn", "valuation", "cn_all_valuation_latest"),
+    "instruments": (
+        "assets",
+        "rqdata",
+        "cn",
+        "instruments",
+        "cn_all_instruments_latest.parquet",
+    ),
+    "pit": ("assets", "rqdata", "cn", "pit_financials", "cn_all_pit_financials_latest"),
+    "ex_factors": ("assets", "rqdata", "cn", "ex_factors", "cn_all_ex_factors_latest"),
+    "dividends": ("assets", "rqdata", "cn", "dividends", "cn_all_dividends_latest"),
+    "shares": ("assets", "rqdata", "cn", "shares", "cn_all_shares_latest"),
+    "industry": ("assets", "rqdata", "cn", "industry", "cn_industry_latest"),
+    "industry_citic": ("assets", "rqdata", "cn", "industry_citic", "cn_industry_citic_latest"),
+    "industry_sw": ("assets", "rqdata", "cn", "industry_sw", "cn_industry_sw_latest"),
+    "st_flags": ("assets", "rqdata", "cn", "st_flags", "cn_st_flags_latest"),
+    "suspend": ("assets", "rqdata", "cn", "suspend", "cn_suspend_latest"),
+    "limit_status": ("assets", "rqdata", "cn", "limit_status", "cn_limit_status_latest"),
+    "index_components": (
+        "assets",
+        "rqdata",
+        "cn",
+        "index_components",
+        "cn_index_components_latest",
+    ),
+    "northbound": ("assets", "rqdata", "cn", "northbound", "cn_northbound_latest"),
+    "universe_by_date": ("assets", "universe", "cn_all_full_by_date.csv"),
+    "universe_symbols": ("assets", "universe", "cn_all_full_symbols.txt"),
+    "universe_meta": ("assets", "universe", "cn_all_full_by_date.meta.yml"),
+}
+
+ASSET_PATH_SPECS_BY_MARKET: dict[str, dict[str, tuple[str, ...]]] = {
+    "hk": HK_ASSET_PATH_SPECS,
+    "cn": CN_ASSET_PATH_SPECS,
+}
+
+# Backward-compatible alias for existing HK callers.
+ASSET_PATH_SPECS = HK_ASSET_PATH_SPECS
+
 
 def resolve_artifacts_root(value: str | Path | None = None) -> Path:
     raw = (
         str(value).strip()
         if value is not None
-        else os.environ.get(HK_DATA_PLATFORM_ROOT_ENV)
+        else os.environ.get(DATA_PLATFORM_ROOT_ENV)
+        or os.environ.get(HK_DATA_PLATFORM_ROOT_ENV)
         or os.environ.get(CSTREE_ARTIFACTS_ROOT_ENV)
         or "artifacts"
     )
     return Path(raw).expanduser().resolve()
 
 
-def current_contract_path(artifacts_root: str | Path | None = None) -> Path:
-    return resolve_artifacts_root(artifacts_root) / CURRENT_CONTRACT_RELATIVE_PATH
+def current_contract_path(
+    artifacts_root: str | Path | None = None,
+    *,
+    market: str | None = None,
+) -> Path:
+    return resolve_artifacts_root(artifacts_root) / current_contract_relative_path(market)
 
 
 def dataset_registry_path(artifacts_root: str | Path | None = None) -> Path:
     return resolve_artifacts_root(artifacts_root) / DATASET_REGISTRY_RELATIVE_PATH
 
 
-def candidate_asset_paths(artifacts_root: str | Path | None = None) -> dict[str, Path]:
+def candidate_asset_paths(
+    artifacts_root: str | Path | None = None,
+    *,
+    market: str | None = None,
+) -> dict[str, Path]:
     root = resolve_artifacts_root(artifacts_root)
-    return {key: root.joinpath(*parts) for key, parts in ASSET_PATH_SPECS.items()}
+    market = normalize_market(market)
+    specs = ASSET_PATH_SPECS_BY_MARKET[market]
+    return {key: root.joinpath(*parts) for key, parts in specs.items()}
