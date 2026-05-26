@@ -165,12 +165,47 @@ marketdata rqdata hk-depth -- aggregate-daily --input <raw-depth-dir> --output <
 
 marketdata rqdata hk-assets -- mirror-hk-daily <原 cstree rqdata 参数>
 marketdata rqdata hk-assets -- build-hk-daily-clean-layer <原 cstree rqdata 参数>
+
+marketdata migration sync-hk-links --artifacts-root "$DATA_PLATFORM_ROOT"
+marketdata rqdata inspect-hk-current \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --target-date 20260526
+
+marketdata rqdata refresh-hk-current \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --target-date 20260526 \
+  --refresh-asset daily --refresh-asset daily_clean \
+  --inspect-asset daily --inspect-asset daily_clean
+
+marketdata rqdata refresh-hk-intraday \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --start-date 20260526 \
+  --end-date 20260526
+
+marketdata rqdata refresh-hk-depth \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --start-date 20260526 \
+  --end-date 20260526 \
+  --symbols-file "$DATA_PLATFORM_ROOT/assets/rqdata/hk/daily/hk_all_daily_clean_latest/symbols.txt" \
+  --name hk_tick_depth_increment_20260526
+
+marketdata rqdata refresh-hk-fundamentals \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --target-date 20260526
 ```
 
 在当前 workspace 中，调度器优先使用 sibling repo 的 `.venv/bin/python -m ...`
 运行 backend 模块，避免依赖可能过期的 console-script shebang。在其他部署环境中，可通过
 `MARKETDATA_HK_DEPTH_COMMAND` / `MARKETDATA_HK_ASSETS_COMMAND` 指定 backend
-可执行命令。这是迁移期间的兼容入口；物理源码迁移完成前，
+可执行命令。`refresh-hk-current` 是平台侧 HK current wrapper：它会先把
+`cross-sectional-trees` 的过渡资产链接指向统一 artifacts root，再调用既有
+HK refresh workflow，并在成功后由 `market-data-platform` 重新生成
+`hk_current.json` 与 `dataset_registry.csv`，并同步一份 registry 给过渡期
+`cross-sectional-trees`。`inspect-hk-current` 提供同一根目录下的 current contract
+健康度检查。`refresh-hk-intraday`、`refresh-hk-depth` 和
+`refresh-hk-fundamentals` 分别封装 5m 增量刷新、tick-depth download/health/aggregate/
+publish、PIT patch 与 financial details 刷新，并同样在成功后重建 current contract。
+这是迁移期间的兼容入口；物理源码迁移完成前，
 `marketdata migration status` 会将两个 HK backend 标为 `transition_backend`。
 
 `hkdata` 命令和 `hk_data_platform` Python 包名仍作为兼容层保留，新代码应优先使用 `marketdata` 和 `market_data_platform`。
