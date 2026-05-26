@@ -11,6 +11,7 @@ from market_data_platform.paths import (
     candidate_asset_paths,
     current_contract_path,
     normalize_market,
+    normalize_provider,
     resolve_artifacts_root,
 )
 
@@ -73,17 +74,20 @@ def build_current_contract(
     artifacts_root: str | Path | None = None,
     *,
     market: str | None = None,
+    provider: str | None = None,
     generated_by: str | None = None,
     target_date: str | None = None,
 ) -> dict[str, Any]:
     root = resolve_artifacts_root(artifacts_root)
     market = normalize_market(market)
+    provider = normalize_provider(provider, market=market)
     contract_path = current_contract_path(root, market=market)
     contract_name = f"{market}_current"
     return {
         "contract": {
             "name": contract_name,
             "market": market,
+            "provider": provider,
             "version": 1,
             "artifacts_root": str(root),
             "contract_path": str(contract_path),
@@ -93,7 +97,11 @@ def build_current_contract(
         },
         "assets": {
             asset_key: describe_current_path(path)
-            for asset_key, path in candidate_asset_paths(root, market=market).items()
+            for asset_key, path in candidate_asset_paths(
+                root,
+                market=market,
+                provider=provider,
+            ).items()
         },
     }
 

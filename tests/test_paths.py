@@ -84,6 +84,55 @@ def test_cn_paths_and_contract_use_market_specific_layout(tmp_path):
     assert "daily_clean" in contract["assets"]
 
 
+def test_tushare_cn_paths_and_registry_source_are_provider_specific(tmp_path):
+    root = tmp_path / "market-data"
+    assets = candidate_asset_paths(root, market="cn", provider="tushare")
+    assert (
+        assets["daily"]
+        == root.resolve() / "assets" / "tushare" / "cn" / "daily" / "cn_all_daily_latest"
+    )
+    assert assets["trade_cal"].name == "cn_trade_cal_latest.parquet"
+    assert "daily_basic" in assets
+
+    snapshot = root / "assets" / "tushare" / "cn" / "daily" / "cn_all_20260522_daily"
+    snapshot.mkdir(parents=True)
+    (snapshot / "manifest.yml").write_text(
+        "\n".join(
+            [
+                "dataset: daily",
+                "provider: tushare",
+                "status: completed",
+                "query:",
+                "  start_date: '20260521'",
+                "  end_date: '20260522'",
+                "totals:",
+                "  rows: 10",
+                "  symbols: 5",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assets["daily"].parent.mkdir(parents=True, exist_ok=True)
+    assets["daily"].symlink_to(snapshot.name)
+
+    contract = build_current_contract(
+        root,
+        market="cn",
+        provider="tushare",
+        target_date="20260522",
+    )
+    daily = next(
+        row
+        for row in build_dataset_registry_rows(contract)
+        if row["dataset_name"] == "cn_daily"
+    )
+    rows_by_name = {row["dataset_name"]: row for row in build_dataset_registry_rows(contract)}
+    assert contract["contract"]["provider"] == "tushare"
+    assert daily["source"] == "tushare"
+    assert rows_by_name["cn_instruments"]["source"] == "tushare"
+    assert rows_by_name["cn_limit_status"]["source"] == "tushare"
+
+
 def test_build_current_contract_reads_tick_depth_manifest(tmp_path):
     root = tmp_path / "hk-data"
     snapshot = (

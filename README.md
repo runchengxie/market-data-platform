@@ -25,7 +25,8 @@ rqdata-hk-depth-snapshots/
 
 ## 第一阶段拆分边界 (Stage-1 Boundary)
 
-目前，本仓库仅负责定义共享的数据契约和路径规范。具体的业务实现逻辑依然保留在以下项目中：
+目前，本仓库负责共享的数据契约和路径规范，并包含 CN 的 RQData / TuShare
+基础采集 MVP。HK 生产数据维护逻辑依然保留在以下项目中：
 
 - `cross-sectional-trees`：包含日频、PIT、估值、行业分类、标的池、当前数据契约、数据集注册表、数据健康度巡检及发布工具的实现。
 - `rqdata-hk-depth-snapshots`：包含逐笔深度数据的下载、健康度巡检、日频聚合、数据对账及打包逻辑。
@@ -61,6 +62,14 @@ export DATA_PLATFORM_ROOT=/data/market-data-platform
         st_flags/
         suspend/
         limit_status/
+    tushare/
+      cn/
+        instruments/
+        trade_cal/
+        daily/
+        adj_factor/
+        daily_basic/
+        limit_status/
     universe/
   metadata/
     current_assets/
@@ -90,6 +99,44 @@ marketdata registry build --artifacts-root "$DATA_PLATFORM_ROOT"
 marketdata rqdata export-cn-instruments \
   --out "$DATA_PLATFORM_ROOT/assets/rqdata/cn/instruments/cn_all_instruments_latest.parquet"
 ```
+
+## TuShare CN MVP
+
+TuShare 是 CN 的并存 provider，不会替换现有 RQData 命令。安装 optional extra 后，以环境变量提供 token：
+
+```bash
+uv sync --extra dev --extra tushare
+export TUSHARE_TOKEN=...
+
+marketdata tushare verify-token
+marketdata tushare export-cn-instruments \
+  --out "$DATA_PLATFORM_ROOT/assets/tushare/cn/instruments/cn_all_instruments_latest.parquet"
+marketdata tushare mirror-cn-trade-cal \
+  --start-date 20260101 --end-date 20260526 \
+  --out "$DATA_PLATFORM_ROOT/assets/tushare/cn/trade_cal/cn_trade_cal_latest.parquet"
+marketdata tushare mirror-cn-daily \
+  --start-date 20260101 --end-date 20260526 \
+  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/cn/daily/cn_all_20260101_20260526_daily"
+marketdata tushare mirror-cn-adj-factor \
+  --start-date 20260101 --end-date 20260526 \
+  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/cn/adj_factor/cn_all_20260101_20260526_adj_factor"
+marketdata tushare mirror-cn-daily-basic \
+  --start-date 20260101 --end-date 20260526 \
+  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/cn/daily_basic/cn_all_20260101_20260526_daily_basic"
+```
+
+日频类 TuShare 镜像按开放交易日请求全市场并写入
+`data/trade_date=YYYYMMDD/part.parquet`。完成数据校验并将 `*_latest`
+alias 指向采用的 snapshot 后，使用以下命令发布当前 CN provider：
+
+```bash
+marketdata contract build --market cn --provider tushare \
+  --artifacts-root "$DATA_PLATFORM_ROOT" --target-date 20260526
+```
+
+`marketdata tushare mirror-cn-stk-limit` 还可镜像 `stk_limit` 接口形成
+`limit_status` raw 资产；`mirror-cn-limit-status` 是同一操作的兼容别名。当前 MVP
+不包括 clean layer、修复、质量门禁或发布打包。
 
 `hkdata` 命令和 `hk_data_platform` Python 包名仍作为兼容层保留，新代码应优先使用 `marketdata` 和 `market_data_platform`。
 

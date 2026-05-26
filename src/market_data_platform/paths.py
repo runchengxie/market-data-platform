@@ -8,6 +8,10 @@ HK_DATA_PLATFORM_ROOT_ENV = "HK_DATA_PLATFORM_ROOT"
 CSTREE_ARTIFACTS_ROOT_ENV = "CSTREE_ARTIFACTS_ROOT"
 
 SUPPORTED_MARKETS = {"hk", "cn"}
+SUPPORTED_PROVIDERS_BY_MARKET = {
+    "hk": {"rqdata"},
+    "cn": {"rqdata", "tushare"},
+}
 
 
 def normalize_market(market: str | None = None) -> str:
@@ -15,6 +19,19 @@ def normalize_market(market: str | None = None) -> str:
     if value not in SUPPORTED_MARKETS:
         supported = ", ".join(sorted(SUPPORTED_MARKETS))
         raise ValueError(f"Unsupported market '{value}'. Supported markets: {supported}.")
+    return value
+
+
+def normalize_provider(provider: str | None = None, *, market: str | None = None) -> str:
+    market = normalize_market(market)
+    value = str(provider or "rqdata").strip().lower()
+    supported = SUPPORTED_PROVIDERS_BY_MARKET[market]
+    if value not in supported:
+        available = ", ".join(sorted(supported))
+        raise ValueError(
+            f"Unsupported provider '{value}' for market '{market}'. Supported providers: "
+            f"{available}."
+        )
     return value
 
 
@@ -121,9 +138,49 @@ CN_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
     "universe_meta": ("assets", "universe", "cn_all_full_by_date.meta.yml"),
 }
 
-ASSET_PATH_SPECS_BY_MARKET: dict[str, dict[str, tuple[str, ...]]] = {
-    "hk": HK_ASSET_PATH_SPECS,
-    "cn": CN_ASSET_PATH_SPECS,
+TUSHARE_CN_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
+    "instruments": (
+        "assets",
+        "tushare",
+        "cn",
+        "instruments",
+        "cn_all_instruments_latest.parquet",
+    ),
+    "trade_cal": ("assets", "tushare", "cn", "trade_cal", "cn_trade_cal_latest.parquet"),
+    "daily": ("assets", "tushare", "cn", "daily", "cn_all_daily_latest"),
+    "adj_factor": (
+        "assets",
+        "tushare",
+        "cn",
+        "adj_factor",
+        "cn_all_adj_factor_latest",
+    ),
+    "daily_basic": (
+        "assets",
+        "tushare",
+        "cn",
+        "daily_basic",
+        "cn_all_daily_basic_latest",
+    ),
+    "limit_status": (
+        "assets",
+        "tushare",
+        "cn",
+        "limit_status",
+        "cn_limit_status_latest",
+    ),
+    "daily_clean": ("assets", "tushare", "cn", "daily", "cn_all_daily_clean_latest"),
+    "universe_by_date": ("assets", "universe", "cn_all_full_by_date.csv"),
+    "universe_symbols": ("assets", "universe", "cn_all_full_symbols.txt"),
+    "universe_meta": ("assets", "universe", "cn_all_full_by_date.meta.yml"),
+}
+
+ASSET_PATH_SPECS_BY_MARKET_PROVIDER: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
+    "hk": {"rqdata": HK_ASSET_PATH_SPECS},
+    "cn": {
+        "rqdata": CN_ASSET_PATH_SPECS,
+        "tushare": TUSHARE_CN_ASSET_PATH_SPECS,
+    },
 }
 
 # Backward-compatible alias for existing HK callers.
@@ -158,8 +215,10 @@ def candidate_asset_paths(
     artifacts_root: str | Path | None = None,
     *,
     market: str | None = None,
+    provider: str | None = None,
 ) -> dict[str, Path]:
     root = resolve_artifacts_root(artifacts_root)
     market = normalize_market(market)
-    specs = ASSET_PATH_SPECS_BY_MARKET[market]
+    provider = normalize_provider(provider, market=market)
+    specs = ASSET_PATH_SPECS_BY_MARKET_PROVIDER[market][provider]
     return {key: root.joinpath(*parts) for key, parts in specs.items()}

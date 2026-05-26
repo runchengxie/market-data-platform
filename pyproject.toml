@@ -18,6 +18,11 @@ dev = [
   "pyright>=1.1.390",
   "ruff>=0.8",
 ]
+tushare = [
+  "pandas>=2",
+  "pyarrow>=15",
+  "tushare>=1.4",
+]
 
 [project.scripts]
 marketdata = "market_data_platform.cli:main"

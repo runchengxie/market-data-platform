@@ -26,6 +26,9 @@ DATASET_REGISTRY_DESCRIPTIONS = {
         "current {market_label} asset contract with resolved aliases and manifest summaries"
     ),
     "daily": "current {market_label} raw daily OHLCV asset",
+    "trade_cal": "current {market_label} trading calendar",
+    "adj_factor": "current {market_label} adjustment-factor history",
+    "daily_basic": "current {market_label} daily valuation and capitalization metrics",
     "daily_clean": "current {market_label} daily clean layer",
     "intraday": "current {market_label} intraday 5m asset",
     "tick_depth_raw": "current {market_label} raw 10-level tick depth snapshot asset",
@@ -69,14 +72,6 @@ DATASET_REGISTRY_SOURCES = {
     "universe_by_date": "derived",
     "universe_symbols": "derived",
     "universe_meta": "derived",
-    "instruments": "rqdata",
-    "etf_instruments": "rqdata",
-    "tick_depth_raw": "rqdata",
-    "st_flags": "rqdata",
-    "suspend": "rqdata",
-    "limit_status": "rqdata",
-    "index_components": "rqdata",
-    "northbound": "rqdata",
 }
 
 
@@ -156,6 +151,7 @@ def build_dataset_registry_rows(contract: Mapping[str, Any]) -> list[dict[str, s
     artifacts_root = Path(str(contract_meta.get("artifacts_root") or "artifacts")).resolve()
     contract_path = str(contract_meta.get("contract_path") or "").strip()
     market = str(contract_meta.get("market") or "hk").strip().lower() or "hk"
+    provider = str(contract_meta.get("provider") or "rqdata").strip().lower() or "rqdata"
     contract_name = str(contract_meta.get("name") or f"{market}_current").strip()
     rows: list[dict[str, str]] = []
     if contract_path:
@@ -192,7 +188,7 @@ def build_dataset_registry_rows(contract: Mapping[str, Any]) -> list[dict[str, s
                 "date_range": _registry_date_range(entry),
                 "source": DATASET_REGISTRY_SOURCES.get(
                     str(asset_key),
-                    "rqdata" if manifest.get("dataset") else "local",
+                    str(manifest.get("provider") or provider),
                 ),
                 "records": _registry_records_text(raw_entry),
                 "symbols": _registry_symbols_text(raw_entry),

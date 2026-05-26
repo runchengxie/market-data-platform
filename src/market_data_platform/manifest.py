@@ -64,6 +64,7 @@ def load_manifest_summary(path: str | Path) -> dict[str, Any]:
     return {
         "manifest_path": str(manifest_path),
         "dataset": dataset,
+        "provider": str(payload.get("provider") or "").strip() or None,
         "schema_version": schema_version or None,
         "status": str(payload.get("status") or "").strip() or None,
         "output_dir": output_dir or None,

@@ -25,6 +25,7 @@ export DATA_PLATFORM_ROOT=/data/market-data-platform
   "contract": {
     "name": "hk_current",
     "market": "hk",
+    "provider": "rqdata",
     "version": 1,
     "artifacts_root": "/data/market-data-platform",
     "target_date": "20260409"
@@ -82,6 +83,23 @@ marketdata contract build \
 CN 使用同一套 asset key 语义，但路径落在 `assets/rqdata/cn/...`，并额外预留
 `st_flags`、`suspend`、`limit_status`、`index_components`、`industry_citic`、
 `industry_sw`、`northbound` 等 A 股数据资产键。
+
+CN contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此模式下
+`cn_current.json` 的 `contract.provider` 为 `tushare`，当前支持的路径为：
+
+| 资产键名 (Asset key) | TuShare CN 默认路径 |
+| --- | --- |
+| `instruments` | `assets/tushare/cn/instruments/cn_all_instruments_latest.parquet` |
+| `trade_cal` | `assets/tushare/cn/trade_cal/cn_trade_cal_latest.parquet` |
+| `daily` | `assets/tushare/cn/daily/cn_all_daily_latest` |
+| `adj_factor` | `assets/tushare/cn/adj_factor/cn_all_adj_factor_latest` |
+| `daily_basic` | `assets/tushare/cn/daily_basic/cn_all_daily_basic_latest` |
+| `limit_status` | `assets/tushare/cn/limit_status/cn_limit_status_latest` |
+| `daily_clean` | `assets/tushare/cn/daily/cn_all_daily_clean_latest` |
+
+不传 `--provider` 的 CN contract 继续使用原有 `rqdata` 布局。单个
+`cn_current.json` 表示当前采纳的 provider，而不是同时汇总多个 provider 的 raw
+快照。
 
 ## 数据集注册表 (Dataset Registry)
 
