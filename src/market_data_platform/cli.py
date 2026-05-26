@@ -14,30 +14,33 @@ from market_data_platform.paths import (
     normalize_provider,
     resolve_artifacts_root,
 )
+from market_data_platform.providers.rqdata_cn import export_cn_instruments, mirror_cn_daily
+from market_data_platform.providers.tushare_cn import (
+    export_cn_instruments as export_tushare_cn_instruments,
+)
+from market_data_platform.providers.tushare_cn import (
+    mirror_cn_adj_factor as mirror_tushare_cn_adj_factor,
+)
+from market_data_platform.providers.tushare_cn import (
+    mirror_cn_daily as mirror_tushare_cn_daily,
+)
+from market_data_platform.providers.tushare_cn import (
+    mirror_cn_daily_basic as mirror_tushare_cn_daily_basic,
+)
+from market_data_platform.providers.tushare_cn import (
+    mirror_cn_limit_status as mirror_tushare_cn_limit_status,
+)
+from market_data_platform.providers.tushare_cn import (
+    mirror_cn_trade_cal as mirror_tushare_cn_trade_cal,
+)
+from market_data_platform.providers.tushare_cn import (
+    verify_tushare_tokens,
+)
 from market_data_platform.registry import (
     render_combined_dataset_registry_csv,
     write_combined_dataset_registry,
 )
-from market_data_platform.rqdata_cn import export_cn_instruments, mirror_cn_daily
-from market_data_platform.tushare_cn import (
-    export_cn_instruments as export_tushare_cn_instruments,
-)
-from market_data_platform.tushare_cn import (
-    mirror_cn_adj_factor as mirror_tushare_cn_adj_factor,
-)
-from market_data_platform.tushare_cn import (
-    mirror_cn_daily as mirror_tushare_cn_daily,
-)
-from market_data_platform.tushare_cn import (
-    mirror_cn_daily_basic as mirror_tushare_cn_daily_basic,
-)
-from market_data_platform.tushare_cn import (
-    mirror_cn_limit_status as mirror_tushare_cn_limit_status,
-)
-from market_data_platform.tushare_cn import (
-    mirror_cn_trade_cal as mirror_tushare_cn_trade_cal,
-)
-from market_data_platform.tushare_cn import verify_tushare_tokens
+from market_data_platform.transitions import run_transition_backend, transition_status
 
 MARKET_CHOICES = tuple(market for market in ("hk", "cn") if market in SUPPORTED_MARKETS)
 REGISTRY_MARKET_CHOICES = ("all", *MARKET_CHOICES)
@@ -140,6 +143,27 @@ def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
     daily.add_argument("--adjust-type", default="pre")
     daily.add_argument("--skip-existing", action="store_true")
 
+    for name, help_text in (
+        ("hk-depth", "Run transitional HK tick-depth workflows through the platform entrypoint."),
+        (
+            "hk-assets",
+            "Run transitional HK RQData asset workflows through the platform entrypoint.",
+        ),
+    ):
+        transition = rqdata_subparsers.add_parser(
+            name,
+            help=help_text,
+            description=(
+                f"{help_text} Pass backend options after `--`, for example: "
+                f"`marketdata rqdata {name} -- --help`."
+            ),
+        )
+        transition.add_argument(
+            "backend_args",
+            nargs=argparse.REMAINDER,
+            help="Arguments forwarded unchanged to the transition backend.",
+        )
+
 
 def _add_token_env_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -226,6 +250,16 @@ def _add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_migration_parser(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser("migration", help="Data workflow migration status helpers.")
+    migration_subparsers = parser.add_subparsers(dest="migration_command", required=True)
+    status = migration_subparsers.add_parser(
+        "status",
+        help="Show native and transition-backed data workflow ownership.",
+    )
+    status.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="marketdata")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -234,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_registry_parser(subparsers)
     _add_rqdata_parser(subparsers)
     _add_tushare_parser(subparsers)
+    _add_migration_parser(subparsers)
     return parser
 
 
@@ -385,6 +420,11 @@ def _handle_rqdata(args: argparse.Namespace) -> int:
             adjust_type=args.adjust_type,
             skip_existing=args.skip_existing,
         )
+    elif args.rqdata_command in {"hk-depth", "hk-assets"}:
+        backend_args = list(args.backend_args)
+        if backend_args[:1] == ["--"]:
+            backend_args = backend_args[1:]
+        return run_transition_backend(args.rqdata_command, backend_args)
     else:
         raise ValueError(f"Unknown rqdata command: {args.rqdata_command}")
     print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
@@ -435,6 +475,37 @@ def _handle_tushare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_migration_status(args: argparse.Namespace) -> int:
+    payload = {
+        "native": [
+            {
+                "name": "cn-tushare",
+                "status": "native",
+                "capability": (
+                    "CN instruments, trade calendar, daily, adj-factor, daily-basic, "
+                    "and stk-limit mirrors"
+                ),
+            },
+            {
+                "name": "cn-rqdata",
+                "status": "native",
+                "capability": "CN instruments and daily mirror MVP",
+            },
+        ],
+        "transition_backends": transition_status(),
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+    for item in payload["native"]:
+        print(f"{item['name']}: native - {item['capability']}")
+    for item in payload["transition_backends"]:
+        availability = "available" if item["available"] else "unavailable"
+        print(f"{item['name']}: transition_backend ({availability}) - {item['backend_repo']}")
+        print(f"  command: {item['platform_command']}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -448,5 +519,7 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_rqdata(args)
     if args.command == "tushare":
         return _handle_tushare(args)
+    if args.command == "migration" and args.migration_command == "status":
+        return _handle_migration_status(args)
     parser.error(f"Unknown command: {args.command}")
     return 2

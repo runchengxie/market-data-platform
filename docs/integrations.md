@@ -5,7 +5,8 @@
 当前定位：
 * 负责策略研究、特征工程（features）、模型构建、回测、持仓管理及报告生成。
 * 仅作为已发布 HK / CN 数据资产的下游只读调用方。
-* 暂时负责维护多项数据处理命令，后续这些维护工作将统一迁移至本数据平台。
+* 其历史 HK 数据处理实现暂作为 transition backend 保留；新的操作入口为
+  `marketdata rqdata hk-assets -- <原 rqdata 参数>`。
 
 环境配置：
 
@@ -32,7 +33,9 @@ paths:
 ## rqdata-hk-depth-snapshots
 
 当前定位：
-* 负责 Tick 级深度原始数据的下载、数据质量监控（health checks）、日频数据聚合、数据对账（reconciliation）以及打包发布。
+* 暂作为 HK tick-depth transition backend，保留原始数据下载、数据质量监控
+  （health checks）、日频数据聚合、数据对账（reconciliation）以及打包发布实现。
+* 新的统一入口为 `marketdata rqdata hk-depth -- <原 rqdata-hk-depth 参数>`。
 
 推荐发布路径：
 
@@ -53,7 +56,7 @@ reconcile 验收的正式交付目录。候选或分片资产可以先发布到
 ```bash
 export DATA_PLATFORM_ROOT=/data/market-data-platform
 
-rqdata-hk-depth emit-asset \
+marketdata rqdata hk-depth -- emit-asset \
   --kind daily \
   --source artifacts/cache/rqdata/hk_tick_depth_daily/core_20250401_20260409/data.parquet \
   --output "$DATA_PLATFORM_ROOT/assets/rqdata/hk/tick_depth_daily/core_20250401_20260409"

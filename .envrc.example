@@ -1,0 +1,14 @@
+# Copy to .envrc and approve with `direnv allow`.
+# Real credentials belong in .env.local or the user config file, both outside Git.
+
+dotenv_if_exists .env.local
+source_env_if_exists "${XDG_CONFIG_HOME:-$HOME/.config}/market-data-platform/secrets.env"
+
+# Keep one published asset root for CN/HK providers and downstream consumers.
+export DATA_PLATFORM_ROOT="${DATA_PLATFORM_ROOT:-$PWD/artifacts}"
+
+# Optional: keep uv downloads outside the repository.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
+
+watch_file pyproject.toml
+watch_file uv.lock

@@ -5,8 +5,8 @@ import json
 import pytest
 import yaml
 
-from market_data_platform import tushare_cn
 from market_data_platform.cli import build_parser
+from market_data_platform.providers import tushare_cn
 
 
 class FakeDataClient:

@@ -7,6 +7,13 @@ build/
 dist/
 *.egg-info/
 
+# Local credentials and direnv state.
+.env
+.env.*
+!.env.example
+.envrc
+.envrc.local
+
 # Data and generated reports live outside Git.
 artifacts/
 data/

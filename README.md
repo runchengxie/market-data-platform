@@ -25,8 +25,9 @@ rqdata-hk-depth-snapshots/
 
 ## 第一阶段拆分边界 (Stage-1 Boundary)
 
-目前，本仓库负责共享的数据契约和路径规范，并包含 CN 的 RQData / TuShare
-基础采集 MVP。HK 生产数据维护逻辑依然保留在以下项目中：
+目前，本仓库负责共享的数据契约和路径规范、CN 的 RQData / TuShare 基础采集
+MVP，以及统一的数据维护 CLI 入口。HK 生产数据维护实现仍作为 transition
+backend 保留在以下项目中，由 `marketdata rqdata ...` 转发执行：
 
 - `cross-sectional-trees`：包含日频、PIT、估值、行业分类、标的池、当前数据契约、数据集注册表、数据健康度巡检及发布工具的实现。
 - `rqdata-hk-depth-snapshots`：包含逐笔深度数据的下载、健康度巡检、日频聚合、数据对账及打包逻辑。
@@ -38,6 +39,19 @@ export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
 `DATA_PLATFORM_ROOT` 是本仓库推荐使用的统一环境变量。`HK_DATA_PLATFORM_ROOT` 仍作为兼容旧 HK 调用方的 fallback 保留。只有当某个项目明确需要将其运行结果、缓存或报告等输出文件也集中放到该根目录下时，才需要使用 `CSTREE_ARTIFACTS_ROOT` 环境变量。通常情况下，各策略仓库应保持自己独立的输出目录，并统一通过 `DATA_PLATFORM_ROOT` 来读取已发布市场数据。
+
+本地 provider credentials 以本仓库作为配置入口，但不得提交真实 secret。可复制
+`.envrc.example` 为 `.envrc`，并将 token / 密码写入未跟踪的 `.env.local`，或写入
+`~/.config/market-data-platform/secrets.env`：
+
+```bash
+cp .envrc.example .envrc
+cp .env.example .env.local
+direnv allow
+```
+
+`.env.example` 规定了 `TUSHARE_TOKEN`、`RQDATA_USERNAME`、`RQDATA_PASSWORD` 和
+`RQDATA_URI` 等变量名；`.gitignore` 会阻止本地凭证文件进入 Git。
 
 ## 共享目录结构 (Shared Layout)
 
@@ -137,6 +151,27 @@ marketdata contract build --market cn --provider tushare \
 `marketdata tushare mirror-cn-stk-limit` 还可镜像 `stk_limit` 接口形成
 `limit_status` raw 资产；`mirror-cn-limit-status` 是同一操作的兼容别名。当前 MVP
 不包括 clean layer、修复、质量门禁或发布打包。
+
+## HK 迁移入口
+
+HK depth 与既有 HK RQData asset 代码尚未物理迁入本包。为先固定操作入口与 secret
+运行上下文，平台提供 transition backend 调度：
+
+```bash
+marketdata migration status
+
+marketdata rqdata hk-depth -- health --input <raw-depth-dir>
+marketdata rqdata hk-depth -- aggregate-daily --input <raw-depth-dir> --output <daily.parquet>
+
+marketdata rqdata hk-assets -- mirror-hk-daily <原 cstree rqdata 参数>
+marketdata rqdata hk-assets -- build-hk-daily-clean-layer <原 cstree rqdata 参数>
+```
+
+在当前 workspace 中，调度器优先使用 sibling repo 的 `.venv/bin/python -m ...`
+运行 backend 模块，避免依赖可能过期的 console-script shebang。在其他部署环境中，可通过
+`MARKETDATA_HK_DEPTH_COMMAND` / `MARKETDATA_HK_ASSETS_COMMAND` 指定 backend
+可执行命令。这是迁移期间的兼容入口；物理源码迁移完成前，
+`marketdata migration status` 会将两个 HK backend 标为 `transition_backend`。
 
 `hkdata` 命令和 `hk_data_platform` Python 包名仍作为兼容层保留，新代码应优先使用 `marketdata` 和 `market_data_platform`。
 

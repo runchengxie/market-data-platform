@@ -2,7 +2,7 @@
 
 ## 阶段一：共享数据契约 (Shared Contract)
 
-**当前状态**：进行中
+**当前状态**：已建立 contract / registry / provider 基础能力，HK backend 迁移进行中
 
 - 创建当前代码仓库。
 - 现有项目中的数据处理实现逻辑保持不变。
@@ -27,8 +27,13 @@
 - CN instruments / daily 的 RQData 镜像命令
 - CN instruments / trade calendar / daily / adj-factor / daily-basic / limit-status 的 TuShare
   基础镜像命令
+- 共享 `.envrc.example` / `.env.example` provider secret 契约
+- HK depth 与 HK RQData asset 的平台统一 transition 入口：
+  `marketdata rqdata hk-depth -- ...` / `marketdata rqdata hk-assets -- ...`
 
-在下游调用方完全迁移完毕之前，暂时在 `cross-sectional-trees` 中保留兼容适配层 (compatibility wrappers)。
+`marketdata migration status` 会区分已在平台内实现的 `native` 工作流和仍由 sibling
+repo 提供实现的 `transition_backend`。在下游调用方完全迁移完毕之前，暂时在
+`cross-sectional-trees` 与 `rqdata-hk-depth-snapshots` 中保留 backend 实现和兼容入口。
 
 ## 阶段四：确立策略层的只读边界
 
