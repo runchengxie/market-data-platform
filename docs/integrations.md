@@ -5,9 +5,7 @@
 当前定位：
 * 负责策略研究、特征工程（features）、模型构建、回测、持仓管理及报告生成。
 * 仅作为已发布 HK / CN 数据资产的下游只读调用方。
-* 其历史 HK 数据处理入口进入兼容期；新的数据生产、检查和发布操作入口为
-  `marketdata rqdata hk-assets -- <原 rqdata 参数>` 或更高层的
-  `marketdata rqdata refresh-hk-*`。
+* 不再保留 HK 数据生产、检查和发布入口；这些操作入口为 `marketdata rqdata hk-assets -- ...` 或更高层的 `marketdata rqdata refresh-hk-*`。
 
 环境配置：
 
@@ -31,14 +29,12 @@ paths:
 
 ---
 
-## rqdata-hk-depth-snapshots
+## HK tick-depth
 
 当前定位：
-* 作为 HK tick-depth 兼容仓，保留历史命令名、包名、配置和执行记录。
-* 原始数据下载、数据质量监控（health checks）、日频数据聚合、数据对账
-  （reconciliation）以及打包发布实现由 `market_data_platform.hk_depth` 承载。
-* 推荐统一入口为 `marketdata rqdata hk-depth -- <原 rqdata-hk-depth 参数>`；历史
-  `rqdata-hk-depth ...` 命令继续可用。
+* 原始数据下载、数据质量监控（health checks）、日频数据聚合、数据对账（reconciliation）以及打包发布实现由 `market_data_platform.hk_depth` 承载。
+* 推荐统一入口为 `marketdata rqdata hk-depth -- ...`；安装本包后也会提供 `rqdata-hk-depth` 兼容命令。
+* `research-workspace` 不再追踪 `rqdata-hk-depth-snapshots` 子模块，也不再承诺 workspace 内支持 `rqdata_tick_data.*` 旧 Python import 路径。
 
 推荐发布路径：
 

@@ -17,9 +17,6 @@ market-data-platform/
 cross-sectional-trees/
   策略、特征、模型、回测、持仓
   作为 market-data-platform 的纯只读下游消费方
-
-rqdata-hk-depth-snapshots/
-  兼容仓库；tick-depth（逐笔深度）实现已迁入 market-data-platform
 ```
 
 ## 第一阶段拆分边界 (Stage-1 Boundary)
@@ -27,15 +24,13 @@ rqdata-hk-depth-snapshots/
 目前，本仓库负责共享的数据契约和路径规范、CN 的 RQData / TuShare 基础采集
 MVP、HK tick-depth 下载/健康检查/聚合/对账/打包实现，以及统一的数据维护 CLI
 入口。HK RQData asset 生产维护实现已迁入 `market_data_platform.hk_assets`，由
-`marketdata rqdata hk-assets -- ...` 原生执行；`cross-sectional-trees` 的旧入口仅作为
-兼容期入口保留。
+`marketdata rqdata hk-assets -- ...` 原生执行。
 
 - `market_data_platform.hk_assets`：包含日频、PIT、估值、行业分类、标的池、资产健康巡检、current refresh 及发布工具的实现。
 - `market_data_platform.hk_depth`：包含逐笔深度数据的下载、健康度巡检、日频聚合、数据对账及打包逻辑。
-- `cross-sectional-trees`：策略研究下游；迁移期仍保留旧 `cstree rqdata ...` 兼容入口。
+- `cross-sectional-trees`：策略研究下游；只读消费平台发布的数据资产，不再保留 HK 数据资产维护入口。
 
-第一阶段的落地步骤是，将平台内 depth 工具和过渡期 `cross-sectional-trees`
-的数据输出指向同一个共享的产物根目录（Artifacts root）：
+当前落地方式是将平台内 HK depth / HK assets 工具的数据输出指向统一共享的产物根目录（Artifacts root）：
 
 ```bash
 export DATA_PLATFORM_ROOT=/data/market-data-platform
@@ -204,8 +199,8 @@ marketdata rqdata refresh-hk-fundamentals \
 `market_data_platform.hk_assets` 实现；安装本包后也会提供 `rqdata-hk-assets` 命令。
 `refresh-hk-current` 是平台侧 HK current wrapper：它会调用平台内 HK refresh workflow，
 并在成功后由 `market-data-platform` 重新生成 `hk_current.json` 与
-`dataset_registry.csv`。迁移期如果需要让旧 `cross-sectional-trees` 读取同一套数据，
-可继续使用 `marketdata migration sync-hk-links` 同步兼容链接和 registry。
+`dataset_registry.csv`。如果需要让 `cross-sectional-trees` 在本地研究配置中读取同一套数据，
+可使用 `marketdata migration sync-hk-links` 同步 artifacts 兼容链接和 registry；这只是数据路径兼容，不表示 cross 仍拥有数据维护代码。
 `inspect-hk-current` 提供同一根目录下的 current contract 健康度检查。
 `refresh-hk-intraday`、`refresh-hk-depth` 和
 `refresh-hk-fundamentals` 分别封装 5m 增量刷新、tick-depth download/health/aggregate/
