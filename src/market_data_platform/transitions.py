@@ -25,15 +25,6 @@ class TransitionBackend:
 
 
 TRANSITION_BACKENDS = {
-    "hk-depth": TransitionBackend(
-        name="hk-depth",
-        repo="rqdata-hk-depth-snapshots",
-        executable="rqdata-hk-depth",
-        module="rqdata_tick_data.cli",
-        prefix_args=(),
-        command_env="MARKETDATA_HK_DEPTH_COMMAND",
-        capability="HK tick-depth download, health, aggregate, reconcile, and package workflows",
-    ),
     "hk-assets": TransitionBackend(
         name="hk-assets",
         repo="cross-sectional-trees",

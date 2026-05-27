@@ -32,7 +32,20 @@ def test_transition_backend_forwards_to_existing_tool(monkeypatch):
     assert observed == [["/tmp/hk-assets", "rqdata", "mirror-hk-daily"]]
 
 
-def test_cli_forwards_transition_backend_args_after_separator(monkeypatch):
+def test_cli_forwards_native_hk_depth_args_after_separator(monkeypatch):
+    observed: list[list[str]] = []
+
+    def run_backend(argv: list[str]) -> int:
+        observed.append(argv)
+        return 0
+
+    monkeypatch.setattr(cli, "_run_hk_depth_cli", run_backend)
+
+    assert cli.main(["rqdata", "hk-depth", "--", "health", "--input", "raw"]) == 0
+    assert observed == [["health", "--input", "raw"]]
+
+
+def test_cli_forwards_hk_assets_transition_backend_args_after_separator(monkeypatch):
     observed: list[tuple[str, list[str]]] = []
 
     def run_backend(name: str, argv: list[str]) -> int:
@@ -41,21 +54,21 @@ def test_cli_forwards_transition_backend_args_after_separator(monkeypatch):
 
     monkeypatch.setattr(cli, "run_transition_backend", run_backend)
 
-    assert cli.main(["rqdata", "hk-depth", "--", "health", "--input", "raw"]) == 0
-    assert observed == [("hk-depth", ["health", "--input", "raw"])]
+    assert cli.main(["rqdata", "hk-assets", "--", "mirror-hk-daily"]) == 0
+    assert observed == [("hk-assets", ["mirror-hk-daily"])]
 
 
 def test_migration_status_reports_transition_ownership(monkeypatch, capsys):
     monkeypatch.setattr(
         cli,
         "transition_status",
-        lambda: [{"name": "hk-depth", "status": "transition_backend", "available": True}],
+        lambda: [{"name": "hk-assets", "status": "transition_backend", "available": True}],
     )
 
     assert cli.main(["migration", "status", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
 
-    assert payload["native"][0]["name"] == "cn-tushare"
+    assert {item["name"] for item in payload["native"]} >= {"cn-tushare", "cn-rqdata", "hk-depth"}
     assert payload["transition_backends"][0]["status"] == "transition_backend"
 
 
@@ -153,6 +166,7 @@ def test_run_hk_depth_refresh_dry_run_builds_full_pipeline(tmp_path):
     )
 
     commands = [step["command"] for step in summary["steps"]]
+    assert {cmd[2] for cmd in commands} == {"market_data_platform.hk_depth.cli"}
     assert [cmd[3] for cmd in commands] == [
         "download",
         "health",

@@ -57,6 +57,16 @@ REGISTRY_MARKET_CHOICES = ("all", *MARKET_CHOICES)
 PROVIDER_CHOICES = ("rqdata", "tushare")
 
 
+def _strip_backend_separator(argv: list[str]) -> list[str]:
+    return argv[1:] if argv[:1] == ["--"] else argv
+
+
+def _run_hk_depth_cli(argv: list[str]) -> int:
+    from market_data_platform.hk_depth.cli import main as hk_depth_main
+
+    return hk_depth_main(argv)
+
+
 def _add_paths_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("paths", help="Print shared data platform paths.")
     parser.add_argument("--artifacts-root")
@@ -367,11 +377,16 @@ def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     fundamentals_hk.set_defaults(rebuild_contract=True)
 
-    for name, help_text in (
-        ("hk-depth", "Run transitional HK tick-depth workflows through the platform entrypoint."),
+    for name, help_text, backend_description in (
+        (
+            "hk-depth",
+            "Run native HK tick-depth workflows through the platform entrypoint.",
+            "native HK depth CLI",
+        ),
         (
             "hk-assets",
             "Run transitional HK RQData asset workflows through the platform entrypoint.",
+            "transition backend",
         ),
     ):
         transition = rqdata_subparsers.add_parser(
@@ -385,7 +400,7 @@ def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
         transition.add_argument(
             "backend_args",
             nargs=argparse.REMAINDER,
-            help="Arguments forwarded unchanged to the transition backend.",
+            help=f"Arguments forwarded unchanged to the {backend_description}.",
         )
 
 
@@ -652,11 +667,13 @@ def _handle_rqdata(args: argparse.Namespace) -> int:
             adjust_type=args.adjust_type,
             skip_existing=args.skip_existing,
         )
-    elif args.rqdata_command in {"hk-depth", "hk-assets"}:
-        backend_args = list(args.backend_args)
-        if backend_args[:1] == ["--"]:
-            backend_args = backend_args[1:]
-        return run_transition_backend(args.rqdata_command, backend_args)
+    elif args.rqdata_command == "hk-depth":
+        return _run_hk_depth_cli(_strip_backend_separator(list(args.backend_args)))
+    elif args.rqdata_command == "hk-assets":
+        return run_transition_backend(
+            args.rqdata_command,
+            _strip_backend_separator(list(args.backend_args)),
+        )
     elif args.rqdata_command == "refresh-hk-current":
         summary = run_hk_current_refresh(
             artifacts_root=args.artifacts_root,
@@ -799,6 +816,14 @@ def _handle_migration_status(args: argparse.Namespace) -> int:
                 "capability": (
                     "CN instruments, trade calendar, daily, adj-factor, daily-basic, "
                     "and stk-limit mirrors"
+                ),
+            },
+            {
+                "name": "hk-depth",
+                "status": "native",
+                "capability": (
+                    "HK tick-depth download, health, aggregate, reconcile, "
+                    "and package workflows"
                 ),
             },
             {

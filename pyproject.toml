@@ -14,9 +14,25 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "python-dotenv>=1",
   "pytest>=8",
   "pyright>=1.1.390",
   "ruff>=0.8",
+]
+hk-depth = [
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "python-dotenv>=1",
+]
+rqdata = [
+  "pandas>=2.2",
+  "pyarrow>=16",
+  "python-dotenv>=1",
+  "rqdatac>=3.4.3,<3.5",
+  "rqdatac-hk",
+  "rqsdk",
 ]
 tushare = [
   "pandas>=2",
@@ -27,6 +43,8 @@ tushare = [
 [project.scripts]
 marketdata = "market_data_platform.cli:main"
 hkdata = "hk_data_platform.cli:main"
+rqdata-hk-depth = "market_data_platform.hk_depth.cli:main_entry"
+rqdata-tick = "market_data_platform.hk_depth.cli:main_entry"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -49,7 +67,15 @@ select = ["E", "F", "I", "UP", "B", "C4", "RET", "RUF100"]
 
 [tool.pyright]
 include = ["src/market_data_platform", "src/hk_data_platform"]
-exclude = [".venv", "artifacts", "data", "reports"]
+exclude = [
+  ".venv",
+  "artifacts",
+  "data",
+  "reports",
+  # Migrated from rqdata-hk-depth-snapshots; keep runtime migration separate
+  # from the pandas-heavy typing cleanup.
+  "src/market_data_platform/hk_depth",
+]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.11"

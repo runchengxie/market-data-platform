@@ -63,6 +63,10 @@ def _workspace_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
+def _platform_repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
 def _link_status(link_path: Path, target_path: Path) -> str:
     if link_path.is_symlink():
         if link_path.resolve(strict=False) == target_path.resolve(strict=False):
@@ -181,11 +185,9 @@ def _cstree_rqdata_command(cstree_repo: Path, *args: str) -> list[str]:
     return [str(_checkout_python(cstree_repo)), "-m", "cstree", "rqdata", *args]
 
 
-def _depth_command(workspace: Path, depth_repo: Path, *args: str) -> list[str]:
-    cstree_python = _checkout_python(workspace / "cross-sectional-trees")
-    depth_python = _checkout_python(depth_repo)
-    python = cstree_python if cstree_python.is_file() else depth_python
-    return [str(python), "-m", "rqdata_tick_data.cli", *args]
+def _depth_command(*args: str) -> list[str]:
+    python = _checkout_python(_platform_repo_root())
+    return [str(python), "-m", "market_data_platform.hk_depth.cli", *args]
 
 
 def _run_command(
@@ -591,7 +593,7 @@ def run_hk_depth_refresh(
 ) -> dict[str, Any]:
     root = resolve_artifacts_root(artifacts_root)
     workspace = Path(workspace_root).expanduser().resolve() if workspace_root else _workspace_root()
-    depth_repo = workspace / "rqdata-hk-depth-snapshots"
+    platform_repo = _platform_repo_root()
     start_token = str(start_date).replace("-", "").strip()
     end_token = str(end_date).replace("-", "").strip()
     snapshot_name = str(name or f"hk_tick_depth_{start_token}_{end_token}").strip()
@@ -641,8 +643,6 @@ def run_hk_depth_refresh(
     )
 
     download = _depth_command(
-        workspace,
-        depth_repo,
         "download",
         "--start-date",
         start_token,
@@ -670,8 +670,6 @@ def run_hk_depth_refresh(
     commands: list[list[str]] = [
         download,
         _depth_command(
-            workspace,
-            depth_repo,
             "health",
             "--input",
             str(raw_cache),
@@ -681,8 +679,6 @@ def run_hk_depth_refresh(
             fail_on_severity,
         ),
         _depth_command(
-            workspace,
-            depth_repo,
             "aggregate-daily",
             "--input",
             str(raw_cache),
@@ -696,8 +692,6 @@ def run_hk_depth_refresh(
         commands.extend(
             [
                 _depth_command(
-                    workspace,
-                    depth_repo,
                     "emit-asset",
                     "--kind",
                     "raw",
@@ -707,8 +701,6 @@ def run_hk_depth_refresh(
                     str(raw_asset),
                 ),
                 _depth_command(
-                    workspace,
-                    depth_repo,
                     "emit-asset",
                     "--kind",
                     "daily",
@@ -722,12 +714,12 @@ def run_hk_depth_refresh(
 
     results: list[dict[str, Any]] = []
     returncode = 0
-    env = _backend_environment(depth_repo, root)
+    env = _backend_environment(platform_repo, root)
     for command in commands:
         completed = _run_command(
             runner,
             command,
-            cwd=depth_repo,
+            cwd=platform_repo,
             env=env,
             dry_run=dry_run,
         )
