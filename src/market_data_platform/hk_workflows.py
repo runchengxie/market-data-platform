@@ -181,8 +181,11 @@ def _cstree_rqdata_command(cstree_repo: Path, *args: str) -> list[str]:
     return [str(_checkout_python(cstree_repo)), "-m", "cstree", "rqdata", *args]
 
 
-def _depth_command(depth_repo: Path, *args: str) -> list[str]:
-    return [str(_checkout_python(depth_repo)), "-m", "rqdata_tick_data.cli", *args]
+def _depth_command(workspace: Path, depth_repo: Path, *args: str) -> list[str]:
+    cstree_python = _checkout_python(workspace / "cross-sectional-trees")
+    depth_python = _checkout_python(depth_repo)
+    python = cstree_python if cstree_python.is_file() else depth_python
+    return [str(python), "-m", "rqdata_tick_data.cli", *args]
 
 
 def _run_command(
@@ -638,6 +641,7 @@ def run_hk_depth_refresh(
     )
 
     download = _depth_command(
+        workspace,
         depth_repo,
         "download",
         "--start-date",
@@ -666,6 +670,7 @@ def run_hk_depth_refresh(
     commands: list[list[str]] = [
         download,
         _depth_command(
+            workspace,
             depth_repo,
             "health",
             "--input",
@@ -676,6 +681,7 @@ def run_hk_depth_refresh(
             fail_on_severity,
         ),
         _depth_command(
+            workspace,
             depth_repo,
             "aggregate-daily",
             "--input",
@@ -690,6 +696,7 @@ def run_hk_depth_refresh(
         commands.extend(
             [
                 _depth_command(
+                    workspace,
                     depth_repo,
                     "emit-asset",
                     "--kind",
@@ -700,6 +707,7 @@ def run_hk_depth_refresh(
                     str(raw_asset),
                 ),
                 _depth_command(
+                    workspace,
                     depth_repo,
                     "emit-asset",
                     "--kind",
