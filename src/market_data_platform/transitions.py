@@ -24,17 +24,7 @@ class TransitionBackend:
     capability: str
 
 
-TRANSITION_BACKENDS = {
-    "hk-assets": TransitionBackend(
-        name="hk-assets",
-        repo="cross-sectional-trees",
-        executable="cstree",
-        module="cstree",
-        prefix_args=("rqdata",),
-        command_env="MARKETDATA_HK_ASSETS_COMMAND",
-        capability="HK RQData daily, PIT, valuation, clean, health, and release workflows",
-    ),
-}
+TRANSITION_BACKENDS: dict[str, TransitionBackend] = {}
 
 
 def _workspace_root() -> Path:

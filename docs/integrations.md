@@ -5,8 +5,9 @@
 当前定位：
 * 负责策略研究、特征工程（features）、模型构建、回测、持仓管理及报告生成。
 * 仅作为已发布 HK / CN 数据资产的下游只读调用方。
-* 其历史 HK 数据处理实现暂作为 transition backend 保留；新的操作入口为
-  `marketdata rqdata hk-assets -- <原 rqdata 参数>`。
+* 其历史 HK 数据处理入口进入兼容期；新的数据生产、检查和发布操作入口为
+  `marketdata rqdata hk-assets -- <原 rqdata 参数>` 或更高层的
+  `marketdata rqdata refresh-hk-*`。
 
 环境配置：
 

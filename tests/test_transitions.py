@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 from market_data_platform import cli, hk_workflows, transitions
 from market_data_platform.providers import rqdata_cn, tushare_cn
@@ -12,24 +11,8 @@ def test_provider_modules_are_owned_by_provider_namespace():
     assert tushare_cn.DEFAULT_TOKEN_ENV_KEYS == ("TUSHARE_TOKEN", "TUSHARE_TOKEN_2")
 
 
-def test_transition_backend_forwards_to_existing_tool(monkeypatch):
-    monkeypatch.setattr(
-        transitions,
-        "resolve_transition_command",
-        lambda name: [f"/tmp/{name}"],
-    )
-    observed: list[list[str]] = []
-
-    def runner(command, *, check, env):
-        assert check is False
-        assert env is not None
-        observed.append(command)
-        return SimpleNamespace(returncode=7)
-
-    result = transitions.run_transition_backend("hk-assets", ["mirror-hk-daily"], runner=runner)
-
-    assert result == 7
-    assert observed == [["/tmp/hk-assets", "rqdata", "mirror-hk-daily"]]
+def test_hk_assets_transition_backend_has_been_retired():
+    assert transitions.transition_status() == []
 
 
 def test_cli_forwards_native_hk_depth_args_after_separator(monkeypatch):
@@ -45,31 +28,32 @@ def test_cli_forwards_native_hk_depth_args_after_separator(monkeypatch):
     assert observed == [["health", "--input", "raw"]]
 
 
-def test_cli_forwards_hk_assets_transition_backend_args_after_separator(monkeypatch):
-    observed: list[tuple[str, list[str]]] = []
+def test_cli_forwards_native_hk_assets_args_after_separator(monkeypatch):
+    observed: list[list[str]] = []
 
-    def run_backend(name: str, argv: list[str]) -> int:
-        observed.append((name, argv))
+    def run_backend(argv: list[str]) -> int:
+        observed.append(argv)
         return 0
 
-    monkeypatch.setattr(cli, "run_transition_backend", run_backend)
+    monkeypatch.setattr(cli, "_run_hk_assets_cli", run_backend)
 
     assert cli.main(["rqdata", "hk-assets", "--", "mirror-hk-daily"]) == 0
-    assert observed == [("hk-assets", ["mirror-hk-daily"])]
+    assert observed == [["mirror-hk-daily"]]
 
 
-def test_migration_status_reports_transition_ownership(monkeypatch, capsys):
-    monkeypatch.setattr(
-        cli,
-        "transition_status",
-        lambda: [{"name": "hk-assets", "status": "transition_backend", "available": True}],
-    )
+def test_migration_status_reports_hk_assets_native(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "transition_status", lambda: [])
 
     assert cli.main(["migration", "status", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
 
-    assert {item["name"] for item in payload["native"]} >= {"cn-tushare", "cn-rqdata", "hk-depth"}
-    assert payload["transition_backends"][0]["status"] == "transition_backend"
+    assert {item["name"] for item in payload["native"]} >= {
+        "cn-tushare",
+        "cn-rqdata",
+        "hk-depth",
+        "hk-assets",
+    }
+    assert payload["transition_backends"] == []
 
 
 def test_sync_hk_transition_links_repoints_broken_symlinks(tmp_path):

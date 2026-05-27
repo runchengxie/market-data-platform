@@ -166,8 +166,8 @@ def _backend_environment(repo_root: Path, artifacts_root: Path) -> dict[str, str
     return env
 
 
-def _workflow_environment(cstree_repo: Path, artifacts_root: Path) -> dict[str, str]:
-    return _backend_environment(cstree_repo, artifacts_root)
+def _workflow_environment(repo_root: Path, artifacts_root: Path) -> dict[str, str]:
+    return _backend_environment(repo_root, artifacts_root)
 
 
 def _repo_relative(repo_root: Path, path: Path) -> str:
@@ -181,8 +181,16 @@ def _platform_relative(root: Path, *parts: str) -> Path:
     return root.joinpath(*parts)
 
 
-def _cstree_rqdata_command(cstree_repo: Path, *args: str) -> list[str]:
-    return [str(_checkout_python(cstree_repo)), "-m", "cstree", "rqdata", *args]
+def _hk_assets_command(platform_repo: Path, *args: str) -> list[str]:
+    return [
+        str(_checkout_python(platform_repo)),
+        "-m",
+        "market_data_platform.cli",
+        "rqdata",
+        "hk-assets",
+        "--",
+        *args,
+    ]
 
 
 def _depth_command(*args: str) -> list[str]:
@@ -309,7 +317,7 @@ def run_hk_current_refresh(
 ) -> dict[str, Any]:
     root = resolve_artifacts_root(artifacts_root)
     workspace = Path(workspace_root).expanduser().resolve() if workspace_root else _workspace_root()
-    cstree_repo = workspace / "cross-sectional-trees"
+    platform_repo = _platform_repo_root()
     links = (
         sync_hk_transition_links(root, workspace_root=workspace, dry_run=dry_run)
         if sync_transition_links
@@ -317,8 +325,9 @@ def run_hk_current_refresh(
     )
 
     command: list[str] = [
-        str(_checkout_python(cstree_repo)),
-        "scripts/internal/run_hk_asset_workflow.py",
+        str(_checkout_python(platform_repo)),
+        "-m",
+        "market_data_platform.release_tools.hk_asset_workflow",
         "--phase",
         "refresh",
         "--phase",
@@ -356,8 +365,8 @@ def run_hk_current_refresh(
     completed = runner(
         command,
         check=False,
-        cwd=str(cstree_repo),
-        env=_workflow_environment(cstree_repo, root),
+        cwd=str(platform_repo),
+        env=_workflow_environment(platform_repo, root),
     )
     returncode = int(completed.returncode)
     contract_paths: dict[str, str] = {}
@@ -392,7 +401,7 @@ def run_hk_current_health(
 ) -> dict[str, Any]:
     root = resolve_artifacts_root(artifacts_root)
     workspace = Path(workspace_root).expanduser().resolve() if workspace_root else _workspace_root()
-    cstree_repo = workspace / "cross-sectional-trees"
+    platform_repo = _platform_repo_root()
     links = (
         sync_hk_transition_links(root, workspace_root=workspace, dry_run=dry_run)
         if sync_transition_links
@@ -408,8 +417,8 @@ def run_hk_current_health(
             f"hk_current_health_{target_token or 'current'}_platform.json",
         )
     )
-    command = _cstree_rqdata_command(
-        cstree_repo,
+    command = _hk_assets_command(
+        platform_repo,
         "inspect-hk-current-health",
         "--artifacts-root",
         str(root),
@@ -428,8 +437,8 @@ def run_hk_current_health(
     completed = _run_command(
         runner,
         command,
-        cwd=cstree_repo,
-        env=_workflow_environment(cstree_repo, root),
+        cwd=platform_repo,
+        env=_workflow_environment(platform_repo, root),
         dry_run=dry_run,
     )
     return {
@@ -462,7 +471,7 @@ def run_hk_intraday_refresh(
 ) -> dict[str, Any]:
     root = resolve_artifacts_root(artifacts_root)
     workspace = Path(workspace_root).expanduser().resolve() if workspace_root else _workspace_root()
-    cstree_repo = workspace / "cross-sectional-trees"
+    platform_repo = _platform_repo_root()
     links = (
         sync_hk_transition_links(root, workspace_root=workspace, dry_run=dry_run)
         if sync_transition_links
@@ -507,8 +516,8 @@ def run_hk_intraday_refresh(
         "intraday",
         "hk_intraday_latest",
     )
-    command = _cstree_rqdata_command(
-        cstree_repo,
+    command = _hk_assets_command(
+        platform_repo,
         "sync-hk-intraday",
         "--symbols-file",
         str(symbol_path),
@@ -545,8 +554,8 @@ def run_hk_intraday_refresh(
     completed = _run_command(
         runner,
         command,
-        cwd=cstree_repo,
-        env=_workflow_environment(cstree_repo, root),
+        cwd=platform_repo,
+        env=_workflow_environment(platform_repo, root),
         dry_run=dry_run,
     )
     returncode = int(completed.returncode)
@@ -779,14 +788,14 @@ def run_hk_fundamentals_refresh(
 ) -> dict[str, Any]:
     root = resolve_artifacts_root(artifacts_root)
     workspace = Path(workspace_root).expanduser().resolve() if workspace_root else _workspace_root()
-    cstree_repo = workspace / "cross-sectional-trees"
+    platform_repo = _platform_repo_root()
     links = (
         sync_hk_transition_links(root, workspace_root=workspace, dry_run=dry_run)
         if sync_transition_links
         else []
     )
     target_token = str(target_date).replace("-", "").strip()
-    env = _workflow_environment(cstree_repo, root)
+    env = _workflow_environment(platform_repo, root)
 
     daily_symbols = _platform_relative(
         root,
@@ -841,11 +850,11 @@ def run_hk_fundamentals_refresh(
     financial_output = financial_alias.parent / financial_name
 
     commands: list[list[str]] = [
-        _cstree_rqdata_command(
-            cstree_repo,
+        _hk_assets_command(
+            platform_repo,
             "patch-hk-pit-financials",
             "--base-asset-dir",
-            _repo_relative(cstree_repo, pit_alias),
+            str(pit_alias),
             "--target-date",
             target_token,
             "--patch-start-quarter",
@@ -855,8 +864,8 @@ def run_hk_fundamentals_refresh(
             "--name",
             pit_name,
         ),
-        _cstree_rqdata_command(
-            cstree_repo,
+        _hk_assets_command(
+            platform_repo,
             "mirror-hk-financial-details",
             "--start-quarter",
             financial_start_quarter,
@@ -880,22 +889,22 @@ def run_hk_fundamentals_refresh(
         commands[1].extend(["--config", config])
     if inspect_pit:
         commands.append(
-            _cstree_rqdata_command(
-                cstree_repo,
+            _hk_assets_command(
+                platform_repo,
                 "build-hk-pit-fundamentals",
                 "--asset-dir",
-                _repo_relative(cstree_repo, pit_output),
+                str(pit_output),
                 "--field-profile",
                 "starter",
                 "--force",
             )
         )
         commands.append(
-            _cstree_rqdata_command(
-                cstree_repo,
+            _hk_assets_command(
+                platform_repo,
                 "inspect-hk-pit-coverage",
                 "--asset-dir",
-                _repo_relative(cstree_repo, pit_output),
+                str(pit_output),
                 "--field-profile",
                 "starter",
                 "--mode",
@@ -904,20 +913,16 @@ def run_hk_fundamentals_refresh(
                 "--target-date",
                 target_token,
                 "--by-date-file",
-                _repo_relative(
-                    cstree_repo,
-                    _platform_relative(root, "assets", "universe", "hk_all_full_by_date.csv"),
-                ),
+                str(_platform_relative(root, "assets", "universe", "hk_all_full_by_date.csv")),
                 "--format",
                 "json",
                 "--out",
-                _repo_relative(
-                    cstree_repo,
+                str(
                     _platform_relative(
                         root,
                         "reports",
                         f"hk_pit_health_{target_token}_platform_fundamentals.json",
-                    ),
+                    )
                 ),
                 "--fail-on-severity",
                 "none",
@@ -930,7 +935,7 @@ def run_hk_fundamentals_refresh(
         completed = _run_command(
             runner,
             command,
-            cwd=cstree_repo,
+            cwd=platform_repo,
             env=env,
             dry_run=dry_run,
         )

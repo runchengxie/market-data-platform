@@ -50,7 +50,7 @@ from market_data_platform.registry import (
     render_combined_dataset_registry_csv,
     write_combined_dataset_registry,
 )
-from market_data_platform.transitions import run_transition_backend, transition_status
+from market_data_platform.transitions import transition_status
 
 MARKET_CHOICES = tuple(market for market in ("hk", "cn") if market in SUPPORTED_MARKETS)
 REGISTRY_MARKET_CHOICES = ("all", *MARKET_CHOICES)
@@ -65,6 +65,12 @@ def _run_hk_depth_cli(argv: list[str]) -> int:
     from market_data_platform.hk_depth.cli import main as hk_depth_main
 
     return hk_depth_main(argv)
+
+
+def _run_hk_assets_cli(argv: list[str]) -> int:
+    from market_data_platform.hk_assets.cli import main as hk_assets_main
+
+    return hk_assets_main(argv)
 
 
 def _add_paths_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -385,8 +391,8 @@ def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
         ),
         (
             "hk-assets",
-            "Run transitional HK RQData asset workflows through the platform entrypoint.",
-            "transition backend",
+            "Run native HK RQData asset workflows through the platform entrypoint.",
+            "native HK assets CLI",
         ),
     ):
         transition = rqdata_subparsers.add_parser(
@@ -670,10 +676,7 @@ def _handle_rqdata(args: argparse.Namespace) -> int:
     elif args.rqdata_command == "hk-depth":
         return _run_hk_depth_cli(_strip_backend_separator(list(args.backend_args)))
     elif args.rqdata_command == "hk-assets":
-        return run_transition_backend(
-            args.rqdata_command,
-            _strip_backend_separator(list(args.backend_args)),
-        )
+        return _run_hk_assets_cli(_strip_backend_separator(list(args.backend_args)))
     elif args.rqdata_command == "refresh-hk-current":
         summary = run_hk_current_refresh(
             artifacts_root=args.artifacts_root,
@@ -827,6 +830,14 @@ def _handle_migration_status(args: argparse.Namespace) -> int:
                 ),
             },
             {
+                "name": "hk-assets",
+                "status": "native",
+                "capability": (
+                    "HK RQData daily, PIT, valuation, clean, health, intraday, "
+                    "and release workflows"
+                ),
+            },
+            {
                 "name": "cn-rqdata",
                 "status": "native",
                 "capability": "CN instruments and daily mirror MVP",
@@ -880,3 +891,7 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_migration_sync_hk_links(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

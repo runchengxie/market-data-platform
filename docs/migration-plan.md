@@ -2,7 +2,7 @@
 
 ## 阶段一：共享数据契约 (Shared Contract)
 
-**当前状态**：已建立 contract / registry / provider 基础能力，HK tick-depth 已迁入平台，HK assets 迁移进行中
+**当前状态**：已建立 contract / registry / provider 基础能力，HK tick-depth 和 HK assets 生产实现已迁入平台，研究侧只读边界仍需继续收紧
 
 - 创建当前代码仓库。
 - 现有项目中的数据处理实现逻辑保持不变。
@@ -28,12 +28,12 @@
 - CN instruments / trade calendar / daily / adj-factor / daily-basic / limit-status 的 TuShare
   基础镜像命令
 - 共享 `.envrc.example` / `.env.example` provider secret 契约
-- HK depth 原生入口与 HK RQData asset 的平台统一 transition 入口：
+- HK depth 与 HK RQData asset 的平台统一原生入口：
   `marketdata rqdata hk-depth -- ...` / `marketdata rqdata hk-assets -- ...`
 
 `marketdata migration status` 会区分已在平台内实现的 `native` 工作流和仍由 sibling
-repo 提供实现的 `transition_backend`。当前 `hk-depth` 是 `native`；`hk-assets`
-仍由 `cross-sectional-trees` 提供 transition backend。`rqdata-hk-depth-snapshots`
+repo 提供实现的 `transition_backend`。当前 `hk-depth` 与 `hk-assets` 都是 `native`。
+`rqdata-hk-depth-snapshots`
 保留历史包名、命令名、配置和执行记录，兼容入口委托平台内实现。
 
 ## 阶段三点五：吸收兼容仓库
@@ -45,13 +45,18 @@ repo 提供实现的 `transition_backend`。当前 `hk-depth` 是 `native`；`hk
 
 ## 阶段三点六：迁移 HK assets 生产实现
 
-后续按以下顺序迁移 `cross-sectional-trees` 中的 HK 数据维护代码：
+本阶段已完成以下迁移：
 
 1. 搬迁 provider/runtime、manifest、asset IO、shared path helpers。
 2. 搬迁 daily、valuation、dated assets、financial/PIT、industry 和 intraday mirror。
 3. 搬迁 asset health、current health、coverage、quality gate 和 audit。
 4. 搬迁 package/release/current refresh workflow。
-5. 将 `cross-sectional-trees` 的 `cstree rqdata ...` 保留为只读研究侧兼容入口或移除。
+
+后续剩余工作：
+
+1. 将 `cross-sectional-trees` 的 `cstree rqdata ...` 降级为薄兼容入口，或在下游调用全部切换后移除。
+2. 清理 `cross-sectional-trees` 中已经迁出的业务代码和重复测试。
+3. 将迁移来的平台代码纳入平台原生 lint/type cleanup，而不是长期排除。
 
 ## 阶段四：确立策略层的只读边界
 

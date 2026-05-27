@@ -18,7 +18,7 @@
 
 ## 当前阶段
 
-本项目目前处于第一阶段（仅包含基础骨架）。在当前仓库的共享数据规范彻底稳定之前，实际的业务逻辑仍由 `cross-sectional-trees` 和 `rqdata-hk-depth-snapshots` 这两个代码库负责主导和维护。
+本项目已经承接 HK tick-depth 与 HK RQData assets 的主要业务实现。`cross-sectional-trees` 和 `rqdata-hk-depth-snapshots` 的旧入口进入兼容期；新的数据生产、检查、current refresh 和发布修复应优先进入本仓库。
 
 ## 常用命令
 

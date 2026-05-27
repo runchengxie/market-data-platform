@@ -9,6 +9,7 @@ description = "Shared multi-market research data control plane contracts and hel
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "numpy>=1.23",
   "PyYAML>=6.0",
 ]
 
@@ -45,6 +46,7 @@ marketdata = "market_data_platform.cli:main"
 hkdata = "hk_data_platform.cli:main"
 rqdata-hk-depth = "market_data_platform.hk_depth.cli:main_entry"
 rqdata-tick = "market_data_platform.hk_depth.cli:main_entry"
+rqdata-hk-assets = "market_data_platform.hk_assets.cli:main_entry"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -60,6 +62,23 @@ extend-exclude = [
   "artifacts",
   "data",
   "reports",
+  # Migrated from cross-sectional-trees; keep runtime migration separate from
+  # the historical style cleanup.
+  "src/market_data_platform/artifacts.py",
+  "src/market_data_platform/backup_data.py",
+  "src/market_data_platform/config_utils.py",
+  "src/market_data_platform/current_assets.py",
+  "src/market_data_platform/data_provider_contracts.py",
+  "src/market_data_platform/data_providers.py",
+  "src/market_data_platform/hk_assets",
+  "src/market_data_platform/intraday_paths.py",
+  "src/market_data_platform/pit_feature_stats.py",
+  "src/market_data_platform/rebalance.py",
+  "src/market_data_platform/release_tools",
+  "src/market_data_platform/repo_paths.py",
+  "src/market_data_platform/rqdata_cli_common.py",
+  "src/market_data_platform/rqdata_runtime.py",
+  "src/market_data_platform/symbols.py",
 ]
 
 [tool.ruff.lint]
@@ -75,6 +94,23 @@ exclude = [
   # Migrated from rqdata-hk-depth-snapshots; keep runtime migration separate
   # from the pandas-heavy typing cleanup.
   "src/market_data_platform/hk_depth",
+  # Migrated from cross-sectional-trees; keep runtime migration separate from
+  # the pandas-heavy typing cleanup.
+  "src/market_data_platform/hk_assets",
+  "src/market_data_platform/artifacts.py",
+  "src/market_data_platform/backup_data.py",
+  "src/market_data_platform/config_utils.py",
+  "src/market_data_platform/current_assets.py",
+  "src/market_data_platform/data_provider_contracts.py",
+  "src/market_data_platform/data_providers.py",
+  "src/market_data_platform/intraday_paths.py",
+  "src/market_data_platform/pit_feature_stats.py",
+  "src/market_data_platform/rebalance.py",
+  "src/market_data_platform/release_tools",
+  "src/market_data_platform/repo_paths.py",
+  "src/market_data_platform/rqdata_cli_common.py",
+  "src/market_data_platform/rqdata_runtime.py",
+  "src/market_data_platform/symbols.py",
 ]
 venvPath = "."
 venv = ".venv"

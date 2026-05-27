@@ -26,11 +26,13 @@ rqdata-hk-depth-snapshots/
 
 目前，本仓库负责共享的数据契约和路径规范、CN 的 RQData / TuShare 基础采集
 MVP、HK tick-depth 下载/健康检查/聚合/对账/打包实现，以及统一的数据维护 CLI
-入口。HK RQData asset 生产维护实现仍作为 transition backend 保留在
-`cross-sectional-trees` 中，由 `marketdata rqdata hk-assets -- ...` 转发执行。
+入口。HK RQData asset 生产维护实现已迁入 `market_data_platform.hk_assets`，由
+`marketdata rqdata hk-assets -- ...` 原生执行；`cross-sectional-trees` 的旧入口仅作为
+兼容期入口保留。
 
-- `cross-sectional-trees`：包含日频、PIT、估值、行业分类、标的池、当前数据契约、数据集注册表、数据健康度巡检及发布工具的实现。
+- `market_data_platform.hk_assets`：包含日频、PIT、估值、行业分类、标的池、资产健康巡检、current refresh 及发布工具的实现。
 - `market_data_platform.hk_depth`：包含逐笔深度数据的下载、健康度巡检、日频聚合、数据对账及打包逻辑。
+- `cross-sectional-trees`：策略研究下游；迁移期仍保留旧 `cstree rqdata ...` 兼容入口。
 
 第一阶段的落地步骤是，将平台内 depth 工具和过渡期 `cross-sectional-trees`
 的数据输出指向同一个共享的产物根目录（Artifacts root）：
@@ -155,9 +157,9 @@ marketdata contract build --market cn --provider tushare \
 
 ## HK 迁移入口
 
-HK tick-depth 代码已经物理迁入 `market_data_platform.hk_depth`，既有 HK RQData
-asset 代码仍未完全迁入本包。为先固定操作入口与 secret 运行上下文，平台保留
-HK asset transition backend 调度：
+HK tick-depth 代码已经物理迁入 `market_data_platform.hk_depth`；HK RQData asset
+生产、检查、current refresh 和发布工作流已经迁入 `market_data_platform.hk_assets`
+与 `market_data_platform.release_tools`。统一入口如下：
 
 ```bash
 marketdata migration status
@@ -198,20 +200,17 @@ marketdata rqdata refresh-hk-fundamentals \
 
 `marketdata rqdata hk-depth -- ...` 和 `marketdata rqdata refresh-hk-depth` 使用平台内
 `market_data_platform.hk_depth` 实现；安装本包后也会提供兼容命令
-`rqdata-hk-depth` 和 `rqdata-tick`。在当前 workspace 中，HK asset 调度器优先使用
-sibling repo 的 `.venv/bin/python -m ...` 运行 backend 模块，避免依赖可能过期的
-console-script shebang。在其他部署环境中，可通过 `MARKETDATA_HK_ASSETS_COMMAND`
-指定 asset backend 可执行命令。`refresh-hk-current` 是平台侧 HK current wrapper：它会先把
-`cross-sectional-trees` 的过渡资产链接指向统一 artifacts root，再调用既有
-HK refresh workflow，并在成功后由 `market-data-platform` 重新生成
-`hk_current.json` 与 `dataset_registry.csv`，并同步一份 registry 给过渡期
-`cross-sectional-trees`。`inspect-hk-current` 提供同一根目录下的 current contract
-健康度检查。`refresh-hk-intraday`、`refresh-hk-depth` 和
+`rqdata-hk-depth` 和 `rqdata-tick`。`marketdata rqdata hk-assets -- ...` 使用平台内
+`market_data_platform.hk_assets` 实现；安装本包后也会提供 `rqdata-hk-assets` 命令。
+`refresh-hk-current` 是平台侧 HK current wrapper：它会调用平台内 HK refresh workflow，
+并在成功后由 `market-data-platform` 重新生成 `hk_current.json` 与
+`dataset_registry.csv`。迁移期如果需要让旧 `cross-sectional-trees` 读取同一套数据，
+可继续使用 `marketdata migration sync-hk-links` 同步兼容链接和 registry。
+`inspect-hk-current` 提供同一根目录下的 current contract 健康度检查。
+`refresh-hk-intraday`、`refresh-hk-depth` 和
 `refresh-hk-fundamentals` 分别封装 5m 增量刷新、tick-depth download/health/aggregate/
 publish、PIT patch 与 financial details 刷新，并同样在成功后重建 current contract。
-这是迁移期间的兼容入口；HK asset 物理源码迁移完成前，
-`marketdata migration status` 会将 `hk-assets` 标为 `transition_backend`，并将
-`hk-depth` 标为 `native`。
+`marketdata migration status` 会将 `hk-assets` 与 `hk-depth` 都标为 `native`。
 
 `hkdata` 命令和 `hk_data_platform` Python 包名仍作为兼容层保留，新代码应优先使用 `marketdata` 和 `market_data_platform`。
 
