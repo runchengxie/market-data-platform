@@ -12,4 +12,4 @@
 
 ## 当前执行准则
 
-当前本代码库负责共享路径、资产键、current contract、dataset registry 和统一数据维护 CLI，并已包含 CN 的 RQData / TuShare 基础采集 MVP。HK 生产环境的数据下载、清洗、对账和打包实现暂以 transition backend 保留在 `cross-sectional-trees` 和 `rqdata-hk-depth-snapshots` 项目中，可经 `marketdata rqdata hk-assets -- ...` 与 `marketdata rqdata hk-depth -- ...` 统一调用，并会分批物理迁移。
+当前本代码库负责共享路径、资产键、current contract、dataset registry 和统一数据维护 CLI，并已包含 CN 的 RQData / TuShare 基础采集 MVP。HK tick-depth 的下载、健康检查、聚合、对账和打包实现已迁入 `market_data_platform.hk_depth`，可经 `marketdata rqdata hk-depth -- ...` 或兼容命令 `rqdata-hk-depth ...` 调用。HK 日线、PIT、估值、行业、intraday、资产健康巡检和发布工作流仍由 `cross-sectional-trees` 作为 `hk-assets` transition backend 承载，入口为 `marketdata rqdata hk-assets -- ...`。

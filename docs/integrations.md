@@ -33,9 +33,11 @@ paths:
 ## rqdata-hk-depth-snapshots
 
 当前定位：
-* 暂作为 HK tick-depth transition backend，保留原始数据下载、数据质量监控
-  （health checks）、日频数据聚合、数据对账（reconciliation）以及打包发布实现。
-* 新的统一入口为 `marketdata rqdata hk-depth -- <原 rqdata-hk-depth 参数>`。
+* 作为 HK tick-depth 兼容仓，保留历史命令名、包名、配置和执行记录。
+* 原始数据下载、数据质量监控（health checks）、日频数据聚合、数据对账
+  （reconciliation）以及打包发布实现由 `market_data_platform.hk_depth` 承载。
+* 推荐统一入口为 `marketdata rqdata hk-depth -- <原 rqdata-hk-depth 参数>`；历史
+  `rqdata-hk-depth ...` 命令继续可用。
 
 推荐发布路径：
 
