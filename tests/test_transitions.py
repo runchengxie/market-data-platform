@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from market_data_platform import cli, hk_workflows, transitions
 from market_data_platform.providers import rqdata_cn, tushare_cn
@@ -54,6 +55,21 @@ def test_migration_status_reports_hk_assets_native(monkeypatch, capsys):
         "hk-assets",
     }
     assert payload["transition_backends"] == []
+
+
+def test_native_hk_universe_configs_resolve_from_platform_repo(tmp_path, monkeypatch):
+    from market_data_platform.hk_assets import (
+        build_hk_connect_universe,
+        build_hk_daily_asset_universe,
+    )
+
+    monkeypatch.chdir(tmp_path)
+
+    hk_connect = build_hk_connect_universe.load_yaml_config(None)
+    hk_all_assets = build_hk_daily_asset_universe.load_yaml_config(None)
+
+    assert hk_connect["hk_connect_universe"]["rebalance_frequency"] == "M"
+    assert hk_all_assets["hk_daily_asset_universe"]["rebalance_frequency"] == "M"
 
 
 def test_sync_hk_transition_links_repoints_broken_symlinks(tmp_path):
@@ -133,6 +149,101 @@ def test_cli_sync_hk_links_prints_file_rows(monkeypatch, capsys):
         capsys.readouterr().out
         == "updated: /tmp/cross/dataset_registry.csv -> /tmp/platform/dataset_registry.csv\n"
     )
+
+
+def test_import_cross_platform_artifacts_plans_only_data_platform_files(tmp_path):
+    workspace = tmp_path / "workspace"
+    cross_artifacts = workspace / "cross-sectional-trees" / "artifacts"
+    artifacts_root = workspace / "market-data-platform" / "artifacts"
+
+    files = {
+        "cache/intraday/hk_intraday.parquet": "bars",
+        "metadata/dataset_registry.csv": "dataset_name\nhk_daily\n",
+        "reports/hk_current_health_20260528.json": "{}",
+        "reports/health_logs/current_health.log": "ok",
+        "reports/hk_all_5m_20260528_slippage_summary.json": "{}",
+        "reports/benchmark_attribution/demo/summary.json": "{}",
+        "runs/demo/summary.json": "{}",
+    }
+    for relative, text in files.items():
+        path = cross_artifacts / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    payload = hk_workflows.import_cross_platform_artifacts(
+        artifacts_root,
+        workspace_root=workspace,
+    )
+
+    relative_paths = {row["relative_path"] for row in payload["items"]}
+    assert relative_paths == {
+        "cache/intraday/hk_intraday.parquet",
+        "metadata/dataset_registry.csv",
+        "reports/health_logs/current_health.log",
+        "reports/hk_current_health_20260528.json",
+    }
+    assert payload["dry_run"] is True
+    assert payload["summary"] == {"dry_run_copy": 4}
+    assert not artifacts_root.joinpath("metadata/dataset_registry.csv").exists()
+
+
+def test_import_cross_platform_artifacts_apply_copies_and_writes_manifest(tmp_path):
+    workspace = tmp_path / "workspace"
+    cross_artifacts = workspace / "cross-sectional-trees" / "artifacts"
+    artifacts_root = workspace / "market-data-platform" / "artifacts"
+    source = cross_artifacts / "metadata" / "dataset_registry.csv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("dataset_name\nhk_daily\n", encoding="utf-8")
+
+    payload = hk_workflows.import_cross_platform_artifacts(
+        artifacts_root,
+        workspace_root=workspace,
+        dry_run=False,
+    )
+
+    target = artifacts_root / "metadata" / "dataset_registry.csv"
+    assert target.read_text(encoding="utf-8") == "dataset_name\nhk_daily\n"
+    assert payload["summary"] == {"copied": 1}
+    assert "manifest" in payload
+    assert Path(payload["manifest"]).exists()
+
+
+def test_cli_import_cross_artifacts_defaults_to_dry_run(monkeypatch, capsys):
+    observed = {}
+
+    def fake_import_cross_platform_artifacts(*args, **kwargs):
+        observed["args"] = args
+        observed["kwargs"] = kwargs
+        return {
+            "source_artifacts_root": "/tmp/cross/artifacts",
+            "target_artifacts_root": "/tmp/platform/artifacts",
+            "dry_run": kwargs["dry_run"],
+            "overwrite": kwargs["overwrite"],
+            "summary": {"dry_run_copy": 1},
+            "items": [
+                {
+                    "relative_path": "metadata/dataset_registry.csv",
+                    "target": "/tmp/platform/artifacts/metadata/dataset_registry.csv",
+                    "status": "dry_run_copy",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        cli,
+        "import_cross_platform_artifacts",
+        fake_import_cross_platform_artifacts,
+    )
+
+    assert (
+        cli.main(["migration", "import-cross-artifacts", "--artifacts-root", "/tmp/platform"])
+        == 0
+    )
+
+    assert observed["args"] == ("/tmp/platform",)
+    assert observed["kwargs"]["dry_run"] is True
+    assert observed["kwargs"]["overwrite"] is False
+    assert "dry_run_copy: metadata/dataset_registry.csv" in capsys.readouterr().out
 
 
 def test_run_hk_depth_refresh_dry_run_builds_full_pipeline(tmp_path):

@@ -9,6 +9,7 @@ from market_data_platform.contract import build_current_contract, write_current_
 from market_data_platform.hk_workflows import (
     HK_INSPECT_ASSET_CHOICES,
     HK_REFRESH_ASSET_CHOICES,
+    import_cross_platform_artifacts,
     run_hk_current_health,
     run_hk_current_refresh,
     run_hk_depth_refresh,
@@ -512,6 +513,25 @@ def _add_migration_parser(subparsers: argparse._SubParsersAction) -> None:
     sync.add_argument("--dry-run", action="store_true")
     sync.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
+    import_cross = migration_subparsers.add_parser(
+        "import-cross-artifacts",
+        help="Copy platform-owned historical artifacts out of cross-sectional-trees.",
+    )
+    import_cross.add_argument("--artifacts-root")
+    import_cross.add_argument("--cross-artifacts-root")
+    import_cross.add_argument("--workspace-root")
+    import_cross.add_argument(
+        "--apply",
+        action="store_true",
+        help="Copy files. Omit this flag for a dry-run plan.",
+    )
+    import_cross.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite differing target files. Symlink targets are never overwritten.",
+    )
+    import_cross.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="marketdata")
@@ -872,6 +892,28 @@ def _handle_migration_sync_hk_links(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_migration_import_cross_artifacts(args: argparse.Namespace) -> int:
+    payload = import_cross_platform_artifacts(
+        args.artifacts_root,
+        cross_artifacts_root=args.cross_artifacts_root,
+        workspace_root=args.workspace_root,
+        dry_run=not args.apply,
+        overwrite=args.overwrite,
+    )
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+    print(f"source_artifacts_root: {payload['source_artifacts_root']}")
+    print(f"target_artifacts_root: {payload['target_artifacts_root']}")
+    print(f"dry_run: {payload['dry_run']}")
+    print(f"summary: {payload['summary']}")
+    if "manifest" in payload:
+        print(f"manifest: {payload['manifest']}")
+    for row in payload["items"]:
+        print(f"{row['status']}: {row['relative_path']} -> {row['target']}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -889,6 +931,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_migration_status(args)
     if args.command == "migration" and args.migration_command == "sync-hk-links":
         return _handle_migration_sync_hk_links(args)
+    if args.command == "migration" and args.migration_command == "import-cross-artifacts":
+        return _handle_migration_import_cross_artifacts(args)
     parser.error(f"Unknown command: {args.command}")
     return 2
 

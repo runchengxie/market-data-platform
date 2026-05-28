@@ -1,0 +1,13 @@
+hk_daily_asset_universe:
+  daily_asset_dir: null
+  start_date: 20000104
+  end_date: 20251231
+  rebalance_frequency: "M"
+  lookback_days: 60
+  min_window_days: 30
+  top_quantile: 0
+  min_turnover: 0
+  out: "artifacts/assets/universe/hk_all_full_by_date.csv"
+  latest_out: "artifacts/assets/universe/hk_all_full_symbols.txt"
+  write_meta: true
+  meta_out: "artifacts/assets/universe/hk_all_full_by_date.meta.yml"

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import filecmp
+import fnmatch
 import json
 import os
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +60,27 @@ _TRANSITION_LINKS = (
     (("assets", "universe"), ("assets", "universe")),
     (("metadata", "current_assets"), ("metadata", "current_assets")),
 )
+
+_CROSS_PLATFORM_ARTIFACT_DIRS = (
+    ("asset", Path("assets") / "rqdata"),
+    ("asset", Path("assets") / "style"),
+    ("asset", Path("assets") / "universe"),
+    ("metadata", Path("metadata")),
+    ("intraday_cache", Path("cache") / "intraday"),
+    ("release", Path("releases")),
+)
+
+_CROSS_PLATFORM_REPORT_PATTERNS = (
+    "reports/broken_current_symlinks_*.json",
+    "reports/health_logs/*",
+    "reports/hk_*_health*.json",
+    "reports/hk_*health*.json",
+    "reports/hk_asset_*.json",
+    "reports/hk_data_asset_audit*.json",
+    "reports/repair_inputs/*",
+)
+
+_CROSS_PLATFORM_SKIP_NAMES = {".gitkeep", ".DS_Store"}
 
 
 def _workspace_root() -> Path:
@@ -143,6 +167,155 @@ def sync_hk_transition_links(
         blocked = ", ".join(str(path) for path in blockers)
         raise RuntimeError(f"Refusing to replace non-symlink transition paths: {blocked}")
     return rows
+
+
+def _default_cross_artifacts_root(workspace_root: str | Path | None = None) -> Path:
+    workspace = Path(workspace_root).expanduser().resolve() if workspace_root else _workspace_root()
+    return workspace / "cross-sectional-trees" / "artifacts"
+
+
+def _iter_regular_artifact_files(base: Path, root: Path) -> Sequence[Path]:
+    if not base.exists() or base.is_symlink():
+        return []
+    if base.is_file():
+        candidates = [base]
+    else:
+        candidates = sorted(path for path in base.rglob("*") if path.is_file())
+    return [
+        path
+        for path in candidates
+        if not path.is_symlink()
+        and path.name not in _CROSS_PLATFORM_SKIP_NAMES
+        and "__pycache__" not in path.relative_to(root).parts
+    ]
+
+
+def _is_platform_report(relative_path: str) -> bool:
+    return any(
+        fnmatch.fnmatchcase(relative_path, pattern)
+        for pattern in _CROSS_PLATFORM_REPORT_PATTERNS
+    )
+
+
+def _collect_cross_platform_artifacts(cross_root: Path) -> list[tuple[str, Path]]:
+    selected: list[tuple[str, Path]] = []
+    seen: set[Path] = set()
+    for category, relative_dir in _CROSS_PLATFORM_ARTIFACT_DIRS:
+        for source in _iter_regular_artifact_files(cross_root / relative_dir, cross_root):
+            resolved = source.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            selected.append((category, source))
+
+    reports_root = cross_root / "reports"
+    for source in _iter_regular_artifact_files(reports_root, cross_root):
+        relative_path = source.relative_to(cross_root).as_posix()
+        if not _is_platform_report(relative_path):
+            continue
+        resolved = source.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        selected.append(("report", source))
+    return sorted(selected, key=lambda item: item[1].relative_to(cross_root).as_posix())
+
+
+def _same_file_contents(source: Path, target: Path) -> bool:
+    try:
+        return filecmp.cmp(source, target, shallow=False)
+    except OSError:
+        return False
+
+
+def _target_import_status(
+    source: Path,
+    target: Path,
+    *,
+    dry_run: bool,
+    overwrite: bool,
+) -> str:
+    if target.is_symlink():
+        if target.exists() and _same_file_contents(source, target):
+            return "exists_same"
+        return "blocked_target_symlink"
+    if target.is_dir():
+        return "blocked_target_directory"
+    if target.exists():
+        if _same_file_contents(source, target):
+            return "exists_same"
+        if not overwrite:
+            return "exists_different"
+        return "dry_run_overwrite" if dry_run else "overwritten"
+    return "dry_run_copy" if dry_run else "copied"
+
+
+def _summarize_import_rows(rows: Sequence[dict[str, Any]]) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for row in rows:
+        status = str(row["status"])
+        summary[status] = summary.get(status, 0) + 1
+    return dict(sorted(summary.items()))
+
+
+def import_cross_platform_artifacts(
+    artifacts_root: str | Path | None = None,
+    *,
+    cross_artifacts_root: str | Path | None = None,
+    workspace_root: str | Path | None = None,
+    dry_run: bool = True,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Copy platform-owned artifacts out of cross-sectional-trees.
+
+    This intentionally excludes research runs, sweeps, live run outputs, exports,
+    benchmark attribution reports, and slippage calibration reports.
+    """
+
+    root = resolve_artifacts_root(artifacts_root)
+    cross_root = (
+        Path(cross_artifacts_root).expanduser().resolve()
+        if cross_artifacts_root
+        else _default_cross_artifacts_root(workspace_root)
+    )
+    rows: list[dict[str, Any]] = []
+    for category, source in _collect_cross_platform_artifacts(cross_root):
+        relative_path = source.relative_to(cross_root)
+        target = root / relative_path
+        status = _target_import_status(source, target, dry_run=dry_run, overwrite=overwrite)
+        if status in {"copied", "overwritten"}:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        rows.append(
+            {
+                "category": category,
+                "relative_path": relative_path.as_posix(),
+                "source": str(source),
+                "target": str(target),
+                "bytes": source.stat().st_size,
+                "status": status,
+            }
+        )
+
+    payload: dict[str, Any] = {
+        "source_artifacts_root": str(cross_root),
+        "target_artifacts_root": str(root),
+        "dry_run": dry_run,
+        "overwrite": overwrite,
+        "summary": _summarize_import_rows(rows),
+        "items": rows,
+    }
+    if not dry_run:
+        timestamp = datetime.now(UTC)
+        generated_at = timestamp.isoformat()
+        manifest = root / "metadata" / "migration" / (
+            f"cross_artifacts_import_{timestamp.strftime('%Y%m%dT%H%M%SZ')}.json"
+        )
+        payload["generated_at"] = generated_at
+        payload["manifest"] = str(manifest)
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload
 
 
 def _checkout_python(repo_root: Path) -> Path:

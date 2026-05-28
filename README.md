@@ -166,6 +166,8 @@ marketdata rqdata hk-assets -- mirror-hk-daily <原 cstree rqdata 参数>
 marketdata rqdata hk-assets -- build-hk-daily-clean-layer <原 cstree rqdata 参数>
 
 marketdata migration sync-hk-links --artifacts-root "$DATA_PLATFORM_ROOT"
+marketdata migration import-cross-artifacts --artifacts-root "$DATA_PLATFORM_ROOT" --json
+marketdata migration import-cross-artifacts --artifacts-root "$DATA_PLATFORM_ROOT" --apply
 marketdata rqdata inspect-hk-current \
   --artifacts-root "$DATA_PLATFORM_ROOT" \
   --target-date 20260526
@@ -201,6 +203,11 @@ marketdata rqdata refresh-hk-fundamentals \
 并在成功后由 `market-data-platform` 重新生成 `hk_current.json` 与
 `dataset_registry.csv`。如果需要让 `cross-sectional-trees` 在本地研究配置中读取同一套数据，
 可使用 `marketdata migration sync-hk-links` 同步 artifacts 兼容链接和 registry；这只是数据路径兼容，不表示 cross 仍拥有数据维护代码。
+如果需要把 `cross-sectional-trees/artifacts` 中历史遗留的数据平台产物迁入平台根目录，
+先运行 `marketdata migration import-cross-artifacts --json` 查看计划，再加 `--apply`
+执行复制。该命令只处理 `assets/rqdata`、`assets/style`、`assets/universe`、`metadata`、
+`cache/intraday`、`releases` 以及 HK health/audit 类报告；不会复制研究 runs、sweeps、
+live/export 产物、benchmark attribution 或 slippage calibration 报告，也不会删除源文件。
 `inspect-hk-current` 提供同一根目录下的 current contract 健康度检查。
 `refresh-hk-intraday`、`refresh-hk-depth` 和
 `refresh-hk-fundamentals` 分别封装 5m 增量刷新、tick-depth download/health/aggregate/
