@@ -31,7 +31,13 @@ uv sync --extra dev
 代码检查与测试：
 
 ```bash
-uv run pytest
-uv run ruff check .
-uv run pyright
+uv run python -m pytest
+uv run python -m ruff check .
+uv run python -m pyright
+```
+
+质量债务可见性检查（非阻塞门禁）：
+
+```bash
+uv run --extra dev python scripts/dev/quality_debt.py
 ```

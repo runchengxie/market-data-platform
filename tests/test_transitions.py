@@ -16,6 +16,20 @@ def test_hk_assets_transition_backend_has_been_retired():
     assert transitions.transition_status() == []
 
 
+def test_hk_assets_public_facade_exports_mirror_helpers():
+    from market_data_platform.hk_assets import (
+        mirror_hk_daily,
+        mirror_hk_pit_financials,
+        mirror_hk_valuation,
+        public_api,
+    )
+
+    assert public_api.mirror_hk_daily is mirror_hk_daily
+    assert callable(mirror_hk_daily)
+    assert callable(mirror_hk_valuation)
+    assert callable(mirror_hk_pit_financials)
+
+
 def test_cli_forwards_native_hk_depth_args_after_separator(monkeypatch):
     observed: list[list[str]] = []
 

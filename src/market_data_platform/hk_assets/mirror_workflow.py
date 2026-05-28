@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from market_data_platform.data_providers import _to_rqdata_symbol
+
 from .asset_io import (
     _audit_record,
     _chunked,
@@ -46,6 +47,7 @@ from .shared import (
     _path_mtime_iso,
     _prepare_daily_output_dir,
     _prepare_output_dir,
+    _resolve_fields,
     _timestamp_now,
     _write_manifest,
     _write_text_list,
@@ -56,7 +58,6 @@ DEFAULT_MIRROR_MAX_ATTEMPTS = _package_attr("DEFAULT_MIRROR_MAX_ATTEMPTS")
 DEFAULT_MIRROR_BACKOFF_SECONDS = _package_attr("DEFAULT_MIRROR_BACKOFF_SECONDS")
 DEFAULT_MIRROR_MAX_BACKOFF_SECONDS = _package_attr("DEFAULT_MIRROR_MAX_BACKOFF_SECONDS")
 DEFAULT_OUT_ROOT = _package_attr("DEFAULT_OUT_ROOT")
-_resolve_fields = _package_attr("_resolve_fields")
 
 
 @dataclass(frozen=True)
@@ -1304,7 +1305,8 @@ def _mirror_dated_dataset(
     }
     print(
         f"Wrote {dataset_name} mirror to {output_dir} "
-        f"({totals['symbols']} symbols, {totals['files']} files, {totals['rows']} rows, {totals['bytes']} bytes, status={status})"
+        f"({totals['symbols']} symbols, {totals['files']} files, "
+        f"{totals['rows']} rows, {totals['bytes']} bytes, status={status})"
     )
     return result_code
 
@@ -1530,6 +1532,7 @@ def _mirror_dataset(
     }
     print(
         f"Wrote {dataset_name} mirror to {output_dir} "
-        f"({totals['symbols']} symbols, {totals['files']} files, {totals['rows']} rows, {totals['bytes']} bytes, status={status})"
+        f"({totals['symbols']} symbols, {totals['files']} files, "
+        f"{totals['rows']} rows, {totals['bytes']} bytes, status={status})"
     )
     return result_code

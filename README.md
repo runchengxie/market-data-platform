@@ -225,14 +225,16 @@ publish、PIT patch 与 financial details 刷新，并同样在成功后重建 c
 
 ```bash
 uv sync --extra dev
-uv run pytest
-uv run ruff check .
-uv run pyright
+uv run python -m pytest
+uv run python -m ruff check .
+uv run python -m pyright
 ```
 
 增量治理阶段建议额外跑一组“债务可见性检查”（不作为阻塞门禁）：
 
 ```bash
+uv run --extra dev python scripts/dev/quality_debt.py
+
 uv run --extra dev python -m ruff check src \
   --isolated \
   --select E,F,I,UP,B,C4,RET,RUF100 \

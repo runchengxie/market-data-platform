@@ -11,6 +11,7 @@
 | Catalog、standardized layer 与 DuckDB 查询 | `data-warehouse.md` |
 | 存量项目接入指南 | `integrations.md` |
 | 分步迁移计划与执行顺序 | `migration-plan.md` |
+| 兼容层、迁移入口与质量债务清理计划 | `compatibility.md` |
 
 ## 当前执行准则
 
