@@ -7,6 +7,8 @@
 | 主题内容 | 对应文档 |
 | --- | --- |
 | 共享路径与资产标识（Asset Key）数据契约 | `contracts.md` |
+| HK 数据资产维护入口 | `hk-assets.md` |
+| Catalog、standardized layer 与 DuckDB 查询 | `data-warehouse.md` |
 | 存量项目接入指南 | `integrations.md` |
 | 分步迁移计划与执行顺序 | `migration-plan.md` |
 

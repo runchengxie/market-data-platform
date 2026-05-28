@@ -141,6 +141,34 @@ def _add_registry_parser(subparsers: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_data_parser(subparsers: argparse._SubParsersAction) -> None:
+    from market_data_platform import data_warehouse
+
+    parser = subparsers.add_parser(
+        "data",
+        help="Catalog, materialize, and query manifest-backed data assets.",
+    )
+    data_subparsers = parser.add_subparsers(dest="data_command", required=True)
+
+    catalog = data_subparsers.add_parser(
+        "catalog",
+        help="Refresh the local manifest-backed artifact catalog.",
+    )
+    data_warehouse.add_catalog_args(catalog)
+
+    materialize = data_subparsers.add_parser(
+        "materialize",
+        help="Materialize an input asset or file into the standardized layer.",
+    )
+    data_warehouse.add_materialize_args(materialize)
+
+    query = data_subparsers.add_parser(
+        "query",
+        help="Register standardized views in DuckDB and run a query.",
+    )
+    data_warehouse.add_query_args(query)
+
+
 def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("rqdata", help="RQData mirror/export helpers.")
     rqdata_subparsers = parser.add_subparsers(dest="rqdata_command", required=True)
@@ -539,6 +567,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_paths_parser(subparsers)
     _add_contract_parser(subparsers)
     _add_registry_parser(subparsers)
+    _add_data_parser(subparsers)
     _add_rqdata_parser(subparsers)
     _add_tushare_parser(subparsers)
     _add_migration_parser(subparsers)
@@ -673,6 +702,18 @@ def _handle_registry_build(args: argparse.Namespace) -> int:
     write_combined_dataset_registry(output, contracts)
     print(str(output))
     return 0
+
+
+def _handle_data(args: argparse.Namespace) -> int:
+    from market_data_platform import data_warehouse
+
+    if args.data_command == "catalog":
+        return int(data_warehouse.refresh_catalog(args) or 0)
+    if args.data_command == "materialize":
+        return int(data_warehouse.materialize_standardized(args) or 0)
+    if args.data_command == "query":
+        return int(data_warehouse.query_standardized(args) or 0)
+    raise ValueError(f"Unknown data command: {args.data_command}")
 
 
 def _handle_rqdata(args: argparse.Namespace) -> int:
@@ -923,6 +964,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_contract_build(args)
     if args.command == "registry" and args.registry_command == "build":
         return _handle_registry_build(args)
+    if args.command == "data":
+        return _handle_data(args)
     if args.command == "rqdata":
         return _handle_rqdata(args)
     if args.command == "tushare":

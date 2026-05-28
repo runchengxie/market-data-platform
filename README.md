@@ -193,6 +193,9 @@ marketdata rqdata refresh-hk-depth \
 marketdata rqdata refresh-hk-fundamentals \
   --artifacts-root "$DATA_PLATFORM_ROOT" \
   --target-date 20260526
+
+marketdata data catalog --artifacts-root "$DATA_PLATFORM_ROOT"
+marketdata data query --artifacts-root "$DATA_PLATFORM_ROOT" --sql "select 1 as value"
 ```
 
 `marketdata rqdata hk-depth -- ...` 和 `marketdata rqdata refresh-hk-depth` 使用平台内
@@ -213,6 +216,8 @@ live/export 产物、benchmark attribution 或 slippage calibration 报告，也
 `refresh-hk-fundamentals` 分别封装 5m 增量刷新、tick-depth download/health/aggregate/
 publish、PIT patch 与 financial details 刷新，并同样在成功后重建 current contract。
 `marketdata migration status` 会将 `hk-assets` 与 `hk-depth` 都标为 `native`。
+`marketdata data ...` 承载 manifest catalog、standardized layer 物化和 DuckDB 查询；
+`cross-sectional-trees` 中的 `cstree data ...` 仅作为兼容入口保留。
 
 `hkdata` 命令和 `hk_data_platform` Python 包名仍作为兼容层保留，新代码应优先使用 `marketdata` 和 `market_data_platform`。
 
