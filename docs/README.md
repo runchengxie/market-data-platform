@@ -12,6 +12,7 @@
 | 存量项目接入指南 | `integrations.md` |
 | 迁移记录与后续清理计划 | `migration-plan.md` |
 | 兼容层、迁移入口与质量债务清理计划 | `compatibility.md` |
+| Ruff / Pyright 覆盖、baseline 和维护性治理 | `quality-governance.md` |
 
 ## 当前执行准则
 

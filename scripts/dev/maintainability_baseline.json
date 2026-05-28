@@ -1,0 +1,216 @@
+{
+  "generated_on": "2026-05-28",
+  "metrics": {
+    "functions_over_100": 69,
+    "functions_over_250": 19,
+    "functions_over_500": 0,
+    "functions_with_10_plus_args": 50,
+    "largest_files": [
+      {
+        "lines": 2791,
+        "path": "src/market_data_platform/hk_assets/asset_health.py"
+      },
+      {
+        "lines": 1938,
+        "path": "src/market_data_platform/release_tools/hk_asset_workflow.py"
+      },
+      {
+        "lines": 1819,
+        "path": "src/market_data_platform/hk_assets/audit_assets.py"
+      },
+      {
+        "lines": 1725,
+        "path": "src/market_data_platform/hk_depth/downloader.py"
+      },
+      {
+        "lines": 1613,
+        "path": "src/market_data_platform/hk_assets/mirror_financial.py"
+      },
+      {
+        "lines": 1538,
+        "path": "src/market_data_platform/hk_assets/mirror_workflow.py"
+      },
+      {
+        "lines": 1454,
+        "path": "src/market_data_platform/hk_assets/coverage.py"
+      },
+      {
+        "lines": 1215,
+        "path": "src/market_data_platform/hk_assets/build.py"
+      },
+      {
+        "lines": 1213,
+        "path": "src/market_data_platform/hk_assets/intraday_health.py"
+      },
+      {
+        "lines": 1173,
+        "path": "src/market_data_platform/data_providers.py"
+      },
+      {
+        "lines": 1143,
+        "path": "src/market_data_platform/hk_workflows.py"
+      },
+      {
+        "lines": 1122,
+        "path": "src/market_data_platform/release_tools/package_assets.py"
+      },
+      {
+        "lines": 1118,
+        "path": "src/market_data_platform/data_warehouse.py"
+      },
+      {
+        "lines": 1043,
+        "path": "src/market_data_platform/hk_assets/args.py"
+      },
+      {
+        "lines": 1006,
+        "path": "src/market_data_platform/cli.py"
+      }
+    ],
+    "largest_functions": [
+      {
+        "arguments": 1,
+        "end_line": 1213,
+        "lines": 431,
+        "name": "inspect_hk_intraday_health",
+        "path": "src/market_data_platform/hk_assets/intraday_health.py",
+        "start_line": 783
+      },
+      {
+        "arguments": 24,
+        "end_line": 1540,
+        "lines": 404,
+        "name": "_download_batch_tick_depth",
+        "path": "src/market_data_platform/hk_depth/downloader.py",
+        "start_line": 1137
+      },
+      {
+        "arguments": 2,
+        "end_line": 396,
+        "lines": 349,
+        "name": "mirror_hk_instrument_industry",
+        "path": "src/market_data_platform/hk_assets/mirror_instrument_industry.py",
+        "start_line": 48
+      },
+      {
+        "arguments": 2,
+        "end_line": 393,
+        "lines": 347,
+        "name": "mirror_hk_industry_changes",
+        "path": "src/market_data_platform/hk_assets/mirror_industry_changes.py",
+        "start_line": 47
+      },
+      {
+        "arguments": 1,
+        "end_line": 2791,
+        "lines": 331,
+        "name": "inspect_hk_asset_health",
+        "path": "src/market_data_platform/hk_assets/asset_health.py",
+        "start_line": 2461
+      },
+      {
+        "arguments": 3,
+        "end_line": 1061,
+        "lines": 325,
+        "name": "_build_refresh_steps",
+        "path": "src/market_data_platform/release_tools/hk_asset_workflow.py",
+        "start_line": 737
+      },
+      {
+        "arguments": 2,
+        "end_line": 816,
+        "lines": 324,
+        "name": "mirror_hk_southbound",
+        "path": "src/market_data_platform/hk_assets/mirror_industry_southbound.py",
+        "start_line": 493
+      },
+      {
+        "arguments": 1,
+        "end_line": 868,
+        "lines": 312,
+        "name": "build_hk_daily_clean_layer",
+        "path": "src/market_data_platform/hk_assets/clean_daily.py",
+        "start_line": 557
+      },
+      {
+        "arguments": 24,
+        "end_line": 1110,
+        "lines": 306,
+        "name": "_download_symbol_date_tick_depth",
+        "path": "src/market_data_platform/hk_depth/downloader.py",
+        "start_line": 805
+      },
+      {
+        "arguments": 7,
+        "end_line": 525,
+        "lines": 306,
+        "name": "_build_pit_health_section",
+        "path": "src/market_data_platform/hk_assets/coverage.py",
+        "start_line": 220
+      },
+      {
+        "arguments": 1,
+        "end_line": 1454,
+        "lines": 305,
+        "name": "inspect_hk_pit_coverage",
+        "path": "src/market_data_platform/hk_assets/coverage.py",
+        "start_line": 1150
+      },
+      {
+        "arguments": 1,
+        "end_line": 580,
+        "lines": 302,
+        "name": "main",
+        "path": "src/market_data_platform/hk_assets/build_hk_connect_universe.py",
+        "start_line": 279
+      },
+      {
+        "arguments": 1,
+        "end_line": 905,
+        "lines": 295,
+        "name": "_build_part_specs",
+        "path": "src/market_data_platform/release_tools/package_assets.py",
+        "start_line": 611
+      },
+      {
+        "arguments": 2,
+        "end_line": 1584,
+        "lines": 272,
+        "name": "patch_hk_pit_financials",
+        "path": "src/market_data_platform/hk_assets/mirror_financial.py",
+        "start_line": 1313
+      },
+      {
+        "arguments": 1,
+        "end_line": 452,
+        "lines": 268,
+        "name": "_add_rqdata_parser",
+        "path": "src/market_data_platform/cli.py",
+        "start_line": 185
+      }
+    ],
+    "max_argument_count": 29,
+    "max_file_lines": 2791,
+    "max_function_lines": 431,
+    "public_facade": {
+      "exports": 50,
+      "path": "src/market_data_platform/hk_assets/_public_exports.py",
+      "private_exports": 0
+    },
+    "python_files": 130,
+    "python_lines": 50701,
+    "roots": [
+      "src",
+      "scripts",
+      "tests"
+    ],
+    "thresholds": {
+      "huge_function_lines": 500,
+      "large_function_lines": 100,
+      "many_arguments": 10,
+      "very_large_function_lines": 250
+    },
+    "version": 1
+  },
+  "version": 1
+}

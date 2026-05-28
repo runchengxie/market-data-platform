@@ -524,6 +524,90 @@ def _resolve_assets(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
+def _add_universe_meta_part(parts: dict[str, dict], universe_meta_path: Path | None) -> None:
+    universe_part = parts.get("universe")
+    if not universe_meta_path or not universe_part:
+        return
+    universe_part["entries"].append(
+        _part_entry(
+            "meta",
+            universe_meta_path,
+            f"universe/{universe_meta_path.name}",
+        )
+    )
+    universe_part["latest_links"].append(
+        _latest_link(
+            "universe/latest_meta.yml",
+            f"universe/{universe_meta_path.name}",
+        )
+    )
+    universe_part["summary"]["meta"] = universe_meta_path.name
+
+
+def _build_reference_part(
+    *,
+    ex_factors_dir: Path | None,
+    dividends_dir: Path | None,
+    shares_dir: Path | None,
+) -> dict | None:
+    reference_entries: list[dict] = []
+    reference_links: list[dict] = []
+    reference_summary: dict[str, str] = {}
+    if ex_factors_dir:
+        reference_entries.append(
+            _part_entry(
+                "ex_factors",
+                ex_factors_dir,
+                f"rqdata/hk/ex_factors/{ex_factors_dir.name}",
+            )
+        )
+        reference_links.append(
+            _latest_link(
+                "rqdata/hk/ex_factors/latest",
+                f"rqdata/hk/ex_factors/{ex_factors_dir.name}",
+            )
+        )
+        reference_summary["ex_factors_snapshot"] = ex_factors_dir.name
+    if dividends_dir:
+        reference_entries.append(
+            _part_entry(
+                "dividends",
+                dividends_dir,
+                f"rqdata/hk/dividends/{dividends_dir.name}",
+            )
+        )
+        reference_links.append(
+            _latest_link(
+                "rqdata/hk/dividends/latest",
+                f"rqdata/hk/dividends/{dividends_dir.name}",
+            )
+        )
+        reference_summary["dividends_snapshot"] = dividends_dir.name
+    if shares_dir:
+        reference_entries.append(
+            _part_entry(
+                "shares",
+                shares_dir,
+                f"rqdata/hk/shares/{shares_dir.name}",
+            )
+        )
+        reference_links.append(
+            _latest_link(
+                "rqdata/hk/shares/latest",
+                f"rqdata/hk/shares/{shares_dir.name}",
+            )
+        )
+        reference_summary["shares_snapshot"] = shares_dir.name
+    if not reference_entries:
+        return None
+    return {
+        "description": "Reference snapshots: ex-factors, dividends, shares.",
+        "entries": reference_entries,
+        "latest_links": reference_links,
+        "summary": reference_summary,
+    }
+
+
 def _build_part_specs(resolved: dict[str, object]) -> dict[str, dict]:
     daily_dir = resolved["daily_dir"]
     intraday_dir = resolved["intraday_dir"]
@@ -692,21 +776,7 @@ def _build_part_specs(resolved: dict[str, object]) -> dict[str, dict]:
             else None
         ),
     }
-    if universe_meta_path and parts.get("universe"):
-        parts["universe"]["entries"].append(
-            _part_entry(
-                "meta",
-                universe_meta_path,
-                f"universe/{universe_meta_path.name}",
-            )
-        )
-        parts["universe"]["latest_links"].append(
-            _latest_link(
-                "universe/latest_meta.yml",
-                f"universe/{universe_meta_path.name}",
-            )
-        )
-        parts["universe"]["summary"]["meta"] = universe_meta_path.name
+    _add_universe_meta_part(parts, universe_meta_path)
 
     parts = {name: spec for name, spec in parts.items() if spec is not None}
 
@@ -729,61 +799,13 @@ def _build_part_specs(resolved: dict[str, object]) -> dict[str, dict]:
             "summary": {"snapshot": pit_dir.name},
         }
 
-    reference_entries: list[dict] = []
-    reference_links: list[dict] = []
-    reference_summary: dict[str, str] = {}
-    if ex_factors_dir:
-        reference_entries.append(
-            _part_entry(
-                "ex_factors",
-                ex_factors_dir,
-                f"rqdata/hk/ex_factors/{ex_factors_dir.name}",
-            )
-        )
-        reference_links.append(
-            _latest_link(
-                "rqdata/hk/ex_factors/latest",
-                f"rqdata/hk/ex_factors/{ex_factors_dir.name}",
-            )
-        )
-        reference_summary["ex_factors_snapshot"] = ex_factors_dir.name
-    if dividends_dir:
-        reference_entries.append(
-            _part_entry(
-                "dividends",
-                dividends_dir,
-                f"rqdata/hk/dividends/{dividends_dir.name}",
-            )
-        )
-        reference_links.append(
-            _latest_link(
-                "rqdata/hk/dividends/latest",
-                f"rqdata/hk/dividends/{dividends_dir.name}",
-            )
-        )
-        reference_summary["dividends_snapshot"] = dividends_dir.name
-    if shares_dir:
-        reference_entries.append(
-            _part_entry(
-                "shares",
-                shares_dir,
-                f"rqdata/hk/shares/{shares_dir.name}",
-            )
-        )
-        reference_links.append(
-            _latest_link(
-                "rqdata/hk/shares/latest",
-                f"rqdata/hk/shares/{shares_dir.name}",
-            )
-        )
-        reference_summary["shares_snapshot"] = shares_dir.name
-    if reference_entries:
-        parts["reference"] = {
-            "description": "Reference snapshots: ex-factors, dividends, shares.",
-            "entries": reference_entries,
-            "latest_links": reference_links,
-            "summary": reference_summary,
-        }
+    reference_part = _build_reference_part(
+        ex_factors_dir=ex_factors_dir,
+        dividends_dir=dividends_dir,
+        shares_dir=shares_dir,
+    )
+    if reference_part is not None:
+        parts["reference"] = reference_part
 
     if exchange_rate_dir:
         parts["exchange_rate"] = {

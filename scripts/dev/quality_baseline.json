@@ -1,0 +1,59 @@
+{
+  "generated_on": "2026-05-28",
+  "source_root": "src",
+  "tools": {
+    "pyright": {
+      "excluded_files": 90,
+      "excluded_lines": 41959,
+      "excluded_patterns": [
+        ".venv",
+        "artifacts",
+        "data",
+        "reports",
+        "src/market_data_platform/config_utils.py",
+        "src/market_data_platform/data_provider_contracts.py",
+        "src/market_data_platform/data_providers.py",
+        "src/market_data_platform/data_warehouse.py",
+        "src/market_data_platform/hk_assets",
+        "src/market_data_platform/hk_depth",
+        "src/market_data_platform/pit_feature_stats.py",
+        "src/market_data_platform/rebalance.py",
+        "src/market_data_platform/release_tools",
+        "src/market_data_platform/rqdata_cli_common.py",
+        "src/market_data_platform/rqdata_runtime.py",
+        "src/market_data_platform/symbols.py"
+      ],
+      "included_files": 24,
+      "included_lines": 4837,
+      "included_pct": 10.3,
+      "total_files": 114,
+      "total_lines": 46796
+    },
+    "ruff": {
+      "excluded_files": 64,
+      "excluded_lines": 34087,
+      "excluded_patterns": [
+        ".venv",
+        "artifacts",
+        "data",
+        "reports",
+        "src/market_data_platform/config_utils.py",
+        "src/market_data_platform/data_provider_contracts.py",
+        "src/market_data_platform/data_providers.py",
+        "src/market_data_platform/data_warehouse.py",
+        "src/market_data_platform/hk_assets",
+        "src/market_data_platform/pit_feature_stats.py",
+        "src/market_data_platform/rebalance.py",
+        "src/market_data_platform/release_tools",
+        "src/market_data_platform/rqdata_cli_common.py",
+        "src/market_data_platform/rqdata_runtime.py"
+      ],
+      "included_files": 50,
+      "included_lines": 12709,
+      "included_pct": 27.2,
+      "total_files": 114,
+      "total_lines": 46796
+    }
+  },
+  "version": 1
+}

@@ -46,8 +46,7 @@ def normalize_symbol_for_market(value: object, *, market: str | None) -> str:
 
 
 def _clean_symbol_series(values: pd.Series) -> pd.Series:
-    text = values.where(values.notna(), "").astype(str).str.strip()
-    return text
+    return values.where(values.notna(), "").astype(str).str.strip()
 
 
 def normalize_symbol_standard_name(name: object) -> str:

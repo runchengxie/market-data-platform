@@ -75,7 +75,6 @@ extend-exclude = [
   "src/market_data_platform/release_tools",
   "src/market_data_platform/rqdata_cli_common.py",
   "src/market_data_platform/rqdata_runtime.py",
-  "src/market_data_platform/symbols.py",
 ]
 
 [tool.ruff.lint]
