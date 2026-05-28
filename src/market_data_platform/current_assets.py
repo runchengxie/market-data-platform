@@ -11,7 +11,6 @@ from typing import Any
 
 import yaml
 
-
 HK_CURRENT_CONTRACT_RELATIVE_PATH = Path("metadata") / "current_assets" / "hk_current.json"
 HK_CURRENT_PATH_SPECS = {
     "daily": ("assets", "rqdata", "hk", "daily", "hk_all_daily_latest"),
@@ -34,7 +33,13 @@ HK_CURRENT_PATH_SPECS = {
     ),
     "etf_daily": ("assets", "rqdata", "hk", "daily", "hk_etf_daily_latest"),
     "etf_daily_clean": ("assets", "rqdata", "hk", "daily", "hk_etf_daily_clean_latest"),
-    "etf_instruments": ("assets", "rqdata", "hk", "instruments", "hk_etf_instruments_latest.parquet"),
+    "etf_instruments": (
+        "assets",
+        "rqdata",
+        "hk",
+        "instruments",
+        "hk_etf_instruments_latest.parquet",
+    ),
     "valuation": ("assets", "rqdata", "hk", "valuation", "hk_all_valuation_latest"),
     "instruments": ("assets", "rqdata", "hk", "instruments", "hk_all_instruments_latest.parquet"),
     "pit": ("assets", "rqdata", "hk", "pit_financials", "hk_all_2000_2025_full_market_latest"),
@@ -50,7 +55,13 @@ HK_CURRENT_PATH_SPECS = {
         "financial_details",
         "hk_financial_details_latest",
     ),
-    "industry_changes": ("assets", "rqdata", "hk", "industry_changes", "hk_all_industry_changes_latest"),
+    "industry_changes": (
+        "assets",
+        "rqdata",
+        "hk",
+        "industry_changes",
+        "hk_all_industry_changes_latest",
+    ),
     "universe_by_date": ("assets", "universe", "hk_all_full_by_date.csv"),
     "universe_symbols": ("assets", "universe", "hk_all_full_symbols.txt"),
     "universe_meta": ("assets", "universe", "hk_all_full_by_date.meta.yml"),
@@ -265,7 +276,9 @@ DATASET_REGISTRY_DESCRIPTIONS = {
     "intraday": "current HK intraday 5m asset",
     "tick_depth_raw": "current HK raw 10-level tick depth snapshot asset",
     "tick_depth_daily": "current HK daily aggregate derived from 10-level tick depth snapshots",
-    "execution_cost_model": "current HK execution cost model calibrated from market microstructure assets",
+    "execution_cost_model": (
+        "current HK execution cost model calibrated from market microstructure assets"
+    ),
     "etf_daily": "current HK ETF raw daily asset",
     "etf_daily_clean": "current HK ETF daily clean layer",
     "etf_instruments": "current HK ETF instrument master",
@@ -432,7 +445,10 @@ def write_dataset_registry(path: Path, contract: Mapping[str, Any]) -> None:
     path.write_text(render_dataset_registry_csv(contract), encoding="utf-8")
 
 
-def current_contract_entry(contract: Mapping[str, Any] | None, asset_key: str) -> dict[str, Any] | None:
+def current_contract_entry(
+    contract: Mapping[str, Any] | None,
+    asset_key: str,
+) -> dict[str, Any] | None:
     if not isinstance(contract, Mapping):
         return None
     assets = contract.get("assets")

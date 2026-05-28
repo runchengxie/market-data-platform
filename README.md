@@ -230,4 +230,19 @@ uv run ruff check .
 uv run pyright
 ```
 
+增量治理阶段建议额外跑一组“债务可见性检查”（不作为阻塞门禁）：
+
+```bash
+uv run --extra dev python -m ruff check src \
+  --isolated \
+  --select E,F,I,UP,B,C4,RET,RUF100 \
+  --line-length 100 \
+  --target-version py311 \
+  --exit-zero
+
+uv run --extra dev python -m pyright src \
+  --outputjson \
+  --level warning
+```
+
 关于数据契约的详细说明及迁移指南，请参阅 `docs/README.md`。

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import yaml
 
-from .repo_paths import find_repo_root, resolve_repo_path as resolve_repo_relative_path
-
+from .repo_paths import find_repo_root
+from .repo_paths import resolve_repo_path as resolve_repo_relative_path
 
 REPO_ROOT = find_repo_root(__file__)
 
@@ -157,7 +157,9 @@ def resolve_intraday_input_groups(input_specs: list[str]) -> list[IntradayInputG
             )
             continue
 
-        scan_root = input_path / "data" if _looks_like_intraday_asset_dir(input_path) else input_path
+        scan_root = (
+            input_path / "data" if _looks_like_intraday_asset_dir(input_path) else input_path
+        )
         groups = _collect_groups_from_root(scan_root)
         if not groups:
             raise SystemExit(f"No intraday parquet files found under: {input_path}")
@@ -185,7 +187,9 @@ def resolve_input_parquet_paths(input_specs: list[str]) -> list[Path]:
         if group.parquet_path is not None and group.parquet_path.exists():
             resolved.append(group.parquet_path)
             continue
-        raise SystemExit(f"No parquet files found for intraday input: {group.parent_dir / group.stem}")
+        raise SystemExit(
+            f"No parquet files found for intraday input: {group.parent_dir / group.stem}"
+        )
 
     return resolved
 

@@ -4,17 +4,23 @@ import argparse
 import hashlib
 import shutil
 import subprocess
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
 import yaml
 
 from .artifacts import (
     CACHE_DIR as DEFAULT_CACHE_DIR,
+)
+from .artifacts import (
     SNAPSHOTS_DIR as DEFAULT_SNAPSHOTS_DIR,
+)
+from .artifacts import (
     UNIVERSE_DIR as DEFAULT_UNIVERSE_DIR,
+)
+from .artifacts import (
     default_path_text,
 )
 from .current_assets import default_hk_current_contract_path, load_current_contract
@@ -212,7 +218,10 @@ def add_backup_data_args(parser: argparse.ArgumentParser) -> None:
         "--preset",
         choices=["hk_current"],
         default=None,
-        help="Optional backup selection preset. `hk_current` freezes the current HK asset set declared by hk_current.json.",
+        help=(
+            "Optional backup selection preset. "
+            "`hk_current` freezes the current HK asset set declared by hk_current.json."
+        ),
     )
     parser.add_argument(
         "--out-root",
