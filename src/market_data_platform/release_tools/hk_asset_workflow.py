@@ -22,6 +22,8 @@ from market_data_platform.current_assets import (
     write_dataset_registry,
 )
 
+from . import hk_asset_workflow_health as _workflow_health
+from . import hk_asset_workflow_repair as _repair
 from .hk_asset_workflow_config import (
     PATCH_MERGE_SUPPORTED_ASSETS,
     PROVIDER_PERMISSION_EXIT_CODE,
@@ -71,10 +73,7 @@ from .hk_asset_workflow_planning import (
 from .hk_asset_workflow_planning import (
     selected_repair_assets as _selected_repair_assets,
 )
-from .hk_asset_workflow_report import (
-    GATE_SEVERITY_RANK,
-    REPAIR_SEVERITY_RANK,
-)
+from .hk_asset_workflow_report import GATE_SEVERITY_RANK
 from .hk_asset_workflow_report import (
     health_summary_hits_gate as _health_summary_hits_gate,
 )
@@ -182,8 +181,10 @@ def _resolve_asset_end_date(asset_dir: Path, *, asset_name: str) -> str:
     manifest = _load_asset_manifest(asset_dir, asset_name=asset_name)
     query = manifest.get("query")
     if not isinstance(query, dict):
+        manifest_path = asset_dir / "manifest.yml"
         raise SystemExit(
-            f"Patch refresh requires manifest.query with an end date for {asset_name}: {asset_dir / 'manifest.yml'}"
+            "Patch refresh requires manifest.query with an end date for "
+            f"{asset_name}: {manifest_path}"
         )
     for key in ("end_date", "date", "mapping_date", "as_of_date"):
         value = query.get(key)
@@ -299,373 +300,6 @@ def _describe_path(path: Path | None) -> dict[str, Any] | None:
     }
 
 
-def _load_health_report_summary(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
-    quality_checks = payload.get("quality_checks") if isinstance(payload.get("quality_checks"), list) else []
-    severity_counts = {"error": 0, "warning": 0, "info": 0}
-    for item in quality_checks:
-        if not isinstance(item, dict):
-            continue
-        severity = str(item.get("severity") or "").strip().lower()
-        if severity in severity_counts:
-            severity_counts[severity] += 1
-    issue_count = int(sum(severity_counts.values()))
-    overall_severity = "none"
-    if severity_counts["error"] > 0:
-        overall_severity = "error"
-    elif severity_counts["warning"] > 0:
-        overall_severity = "warning"
-    elif severity_counts["info"] > 0:
-        overall_severity = "info"
-    return {
-        "report_path": str(path),
-        "issue_count": issue_count,
-        "severity_counts": severity_counts,
-        "overall_severity": overall_severity,
-        "history_issue_count": int(summary.get("history_issue_count") or 0),
-    }
-
-
-def _load_health_report_payload(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise SystemExit(f"Health report payload must be a JSON object: {path}")
-    return payload
-
-
-def _gate_relevant_quality_checks(
-    payload: Mapping[str, Any],
-    *,
-    threshold: str,
-) -> list[dict[str, Any]]:
-    quality_checks = payload.get("quality_checks") if isinstance(payload.get("quality_checks"), list) else []
-    threshold_rank = GATE_SEVERITY_RANK[threshold]
-    relevant: list[dict[str, Any]] = []
-    for item in quality_checks:
-        if not isinstance(item, dict):
-            continue
-        severity = str(item.get("severity") or "").strip().lower() or "info"
-        if GATE_SEVERITY_RANK.get(severity, -1) >= threshold_rank:
-            relevant.append(item)
-    return relevant
-
-
-def _build_gate_quality_summary(path: Path, *, threshold: str) -> dict[str, Any]:
-    payload = _load_health_report_payload(path)
-    relevant_checks = _gate_relevant_quality_checks(payload, threshold=threshold)
-    severity_counts = {"error": 0, "warning": 0, "info": 0}
-    for item in relevant_checks:
-        severity = str(item.get("severity") or "").strip().lower() or "info"
-        if severity in severity_counts:
-            severity_counts[severity] += 1
-    issue_count = int(sum(severity_counts.values()))
-    overall_severity = "none"
-    if severity_counts["error"] > 0:
-        overall_severity = "error"
-    elif severity_counts["warning"] > 0:
-        overall_severity = "warning"
-    elif severity_counts["info"] > 0:
-        overall_severity = "info"
-    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
-    return {
-        "report_path": str(path),
-        "issue_count": issue_count,
-        "severity_counts": severity_counts,
-        "overall_severity": overall_severity,
-        "history_issue_count": int(summary.get("history_issue_count") or 0),
-        "quality_checks": relevant_checks,
-    }
-
-
-RAW_DAILY_DIAGNOSTIC_CHECKS = {
-    "daily_price_bounds_violation",
-    "daily_nonpositive_price",
-    "daily_negative_volume",
-    "daily_negative_total_turnover",
-    "daily_price_bounds_violation_any_date",
-    "daily_nonpositive_price_any_date",
-    "daily_negative_volume_any_date",
-    "daily_negative_total_turnover_any_date",
-}
-
-
-def _daily_raw_diagnostic_gate_checks(summary: Mapping[str, Any]) -> set[str] | None:
-    relevant_checks = summary.get("quality_checks")
-    if not isinstance(relevant_checks, list) or not relevant_checks:
-        return None
-    checks: set[str] = set()
-    for item in relevant_checks:
-        if not isinstance(item, Mapping):
-            return None
-        check = str(item.get("check") or "").strip()
-        if check not in RAW_DAILY_DIAGNOSTIC_CHECKS:
-            return None
-        checks.add(check)
-    return checks
-
-
-def _suppress_gate_hits_for_clean_daily_consumer_path(
-    gate_results: list[tuple[Step, dict[str, Any]]],
-    *,
-    threshold: str,
-    report: dict[str, Any],
-) -> list[tuple[Step, dict[str, Any]]]:
-    if not gate_results:
-        return gate_results
-
-    by_asset = {
-        str(step.asset_name or ""): summary
-        for step, summary in gate_results
-        if step.asset_name
-    }
-    daily_summary = by_asset.get("daily")
-    daily_clean_summary = by_asset.get("daily_clean")
-    if daily_summary is None or daily_clean_summary is None:
-        return gate_results
-    diagnostic_checks = _daily_raw_diagnostic_gate_checks(daily_summary)
-    if not diagnostic_checks:
-        return gate_results
-    if _health_summary_hits_gate(daily_clean_summary, threshold=threshold):
-        return gate_results
-
-    if diagnostic_checks == {"daily_price_bounds_violation"}:
-        reason = "raw daily price-bounds-only issues are tolerated when daily_clean passes the gate"
-    else:
-        reason = (
-            "raw daily diagnostic data-quality issues are tolerated when daily_clean passes the gate"
-        )
-    gate = report.setdefault("gate", {})
-    suppressed = gate.setdefault("suppressed_triggered_assets", [])
-    suppressed_entry = {
-        "asset_name": "daily",
-        "overall_severity": daily_summary.get("overall_severity"),
-        "severity_counts": dict(daily_summary.get("severity_counts") or {}),
-        "report_path": daily_summary.get("report_path"),
-        "reason": reason,
-    }
-    if suppressed_entry not in suppressed:
-        suppressed.append(suppressed_entry)
-
-    return [
-        (step, summary)
-        for step, summary in gate_results
-        if not (step.asset_name == "daily" and summary is daily_summary)
-    ]
-
-
-def _append_repair_candidate(
-    candidates: dict[tuple[str, str | None, str | None, str | None], dict[str, Any]],
-    *,
-    symbol: str | None,
-    trade_date: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
-    check: str,
-    severity: str | None,
-    field: str | None = None,
-    source: str,
-    asset_name: str | None = None,
-    reference_context: str | None = None,
-    error: str | None = None,
-) -> None:
-    symbol_text = str(symbol or "").strip()
-    if not symbol_text:
-        return
-    key = (
-        symbol_text,
-        str(trade_date).strip() or None if trade_date is not None else None,
-        str(start_date).strip() or None if start_date is not None else None,
-        str(end_date).strip() or None if end_date is not None else None,
-    )
-    entry = candidates.setdefault(
-        key,
-        {
-            "symbol": symbol_text,
-            "trade_date": key[1],
-            "start_date": key[2],
-            "end_date": key[3],
-            "checks": [],
-            "fields": [],
-            "sources": [],
-            "reference_contexts": [],
-            "errors": [],
-            "max_severity": "info",
-            "asset_name": asset_name,
-        },
-    )
-    if check and check not in entry["checks"]:
-        entry["checks"].append(check)
-    if field and field not in entry["fields"]:
-        entry["fields"].append(field)
-    if source and source not in entry["sources"]:
-        entry["sources"].append(source)
-    if reference_context and reference_context not in entry["reference_contexts"]:
-        entry["reference_contexts"].append(reference_context)
-    if error and error not in entry["errors"]:
-        entry["errors"].append(error)
-    severity_text = str(severity or "info").strip().lower() or "info"
-    if REPAIR_SEVERITY_RANK.get(severity_text, -1) > REPAIR_SEVERITY_RANK.get(entry["max_severity"], -1):
-        entry["max_severity"] = severity_text
-
-
-def _extract_health_repair_candidates(
-    *,
-    payload: Mapping[str, Any],
-    asset_name: str | None,
-) -> list[dict[str, Any]]:
-    summary = payload.get("summary") if isinstance(payload.get("summary"), Mapping) else {}
-    target_date = str(summary.get("target_date") or "").strip() or None
-    field_rows = payload.get("field_coverage") if isinstance(payload.get("field_coverage"), list) else []
-    field_map = {
-        str(row.get("field")): row
-        for row in field_rows
-        if isinstance(row, Mapping) and str(row.get("field") or "").strip()
-    }
-    candidates: dict[tuple[str, str | None, str | None, str | None], dict[str, Any]] = {}
-
-    for row in payload.get("sample_missing_asset_file_details") or []:
-        if not isinstance(row, Mapping):
-            continue
-        _append_repair_candidate(
-            candidates,
-            symbol=str(row.get("symbol") or "").strip() or None,
-            trade_date=target_date,
-            check="missing_asset_file",
-            severity="error",
-            source="missing_asset_file",
-            asset_name=asset_name,
-            error=str(row.get("error") or "").strip() or None,
-        )
-
-    for row in payload.get("sample_stale_symbols") or []:
-        if not isinstance(row, Mapping):
-            continue
-        _append_repair_candidate(
-            candidates,
-            symbol=str(row.get("symbol") or "").strip() or None,
-            start_date=str(row.get("latest_date") or "").strip() or None,
-            end_date=target_date,
-            check="stale_symbol_missing_target_date_row",
-            severity="warning",
-            source="sample_stale_symbols",
-            asset_name=asset_name,
-            error=str(row.get("status") or "").strip() or None,
-        )
-
-    for issue in payload.get("quality_checks") or []:
-        if not isinstance(issue, Mapping):
-            continue
-        check = str(issue.get("check") or "").strip()
-        severity = str(issue.get("severity") or "").strip().lower() or "info"
-        field = str(issue.get("field") or "").strip() or None
-        sample_symbols = [
-            str(item).strip()
-            for item in (issue.get("sample_symbols") or [])
-            if str(item).strip()
-        ]
-        if not sample_symbols:
-            continue
-        field_row = field_map.get(field or "")
-        detail_key = None
-        if "provider_like_ffill" in check or check == "field_all_clean_missing_on_target_date_provider_like":
-            detail_key = "sample_provider_like_ffill_symbols"
-        elif "ffill_age_gt_" in check:
-            detail_key = "sample_oldest_ffill_symbols"
-        elif "fresh_target_gap" in check:
-            detail_key = "sample_fresh_target_gap_symbols"
-        detail_map = {}
-        if detail_key and isinstance(field_row, Mapping):
-            detail_map = {
-                str(item.get("symbol") or "").strip(): item
-                for item in (field_row.get(detail_key) or [])
-                if isinstance(item, Mapping) and str(item.get("symbol") or "").strip()
-            }
-        for symbol in sample_symbols:
-            detail = detail_map.get(symbol, {})
-            if isinstance(detail, Mapping) and (
-                detail.get("start_date") is not None or detail.get("end_date") is not None
-            ):
-                _append_repair_candidate(
-                    candidates,
-                    symbol=symbol,
-                    start_date=str(detail.get("start_date") or "").strip() or None,
-                    end_date=str(detail.get("end_date") or "").strip() or None,
-                    check=check,
-                    severity=severity,
-                    field=field,
-                    source="quality_checks",
-                    asset_name=asset_name,
-                    reference_context=str(detail.get("reference_context") or "").strip() or None,
-                )
-                continue
-            if isinstance(detail, Mapping) and detail.get("last_nonnull_date") is not None:
-                _append_repair_candidate(
-                    candidates,
-                    symbol=symbol,
-                    start_date=str(detail.get("last_nonnull_date") or "").strip() or None,
-                    end_date=target_date,
-                    check=check,
-                    severity=severity,
-                    field=field,
-                    source="quality_checks",
-                    asset_name=asset_name,
-                    reference_context=str(detail.get("reference_context") or "").strip() or None,
-                )
-                continue
-            _append_repair_candidate(
-                candidates,
-                symbol=symbol,
-                trade_date=target_date,
-                check=check,
-                severity=severity,
-                field=field,
-                source="quality_checks",
-                asset_name=asset_name,
-            )
-
-    history = payload.get("history") if isinstance(payload.get("history"), Mapping) else {}
-    for issue in history.get("issues") or []:
-        if not isinstance(issue, Mapping):
-            continue
-        check = str(issue.get("check") or "").strip()
-        severity = str(issue.get("severity") or "").strip().lower() or "info"
-        field = str(issue.get("field") or "").strip() or None
-        for row in issue.get("sample_rows") or []:
-            if not isinstance(row, Mapping):
-                continue
-            _append_repair_candidate(
-                candidates,
-                symbol=str(row.get("symbol") or "").strip() or None,
-                trade_date=str(row.get("trade_date") or "").strip() or None,
-                start_date=str(row.get("start_date") or "").strip() or None,
-                end_date=str(row.get("end_date") or "").strip() or None,
-                check=check,
-                severity=severity,
-                field=field,
-                source="history_issues",
-                asset_name=asset_name,
-                reference_context=str(row.get("reference_context") or "").strip() or None,
-            )
-
-    return sorted(
-        candidates.values(),
-        key=lambda item: (
-            -REPAIR_SEVERITY_RANK.get(str(item.get("max_severity") or "info"), -1),
-            str(item.get("symbol") or ""),
-            str(item.get("trade_date") or item.get("end_date") or item.get("start_date") or ""),
-        ),
-    )
-
-
-def _load_health_report_analysis(path: Path, *, asset_name: str | None) -> dict[str, Any]:
-    payload = _load_health_report_payload(path)
-    return {
-        "quality": _load_health_report_summary(path),
-        "repair_candidates": _extract_health_repair_candidates(payload=payload, asset_name=asset_name),
-    }
-
-
 def _normalize_gate_severity(value: str) -> str:
     text = str(value or "").strip().lower() or "warning"
     if text not in GATE_SEVERITY_RANK:
@@ -702,7 +336,9 @@ def _record_refresh_report(
 ) -> None:
     if not step.asset_name:
         return
-    target_section = "repair" if str((step.report_metadata or {}).get("mode") or "") == "repair" else "refresh"
+    target_section = (
+        "repair" if str((step.report_metadata or {}).get("mode") or "") == "repair" else "refresh"
+    )
     assets = report.setdefault(target_section, {}).setdefault("assets", {})
     entry = assets.setdefault(step.asset_name, {"asset_name": step.asset_name})
     metadata = dict(step.report_metadata or {})
@@ -736,7 +372,9 @@ def _record_refresh_report(
         patch_path = metadata.get("patch_path")
         if isinstance(patch_path, Path):
             entry["merged_patch"] = _describe_path(patch_path)
-        entry["refreshed"] = _describe_path(refreshed_path) if isinstance(refreshed_path, Path) else None
+        entry["refreshed"] = (
+            _describe_path(refreshed_path) if isinstance(refreshed_path, Path) else None
+        )
         entry["latest_alias"] = _describe_path(alias_path) if isinstance(alias_path, Path) else None
         if metadata.get("symbols_file") is not None:
             entry["symbols_file"] = str(metadata["symbols_file"])
@@ -751,7 +389,10 @@ def _record_inspect_report(
         return
     assets = report.setdefault("inspect", {}).setdefault("assets", {})
     metadata = dict(step.report_metadata or {})
-    analysis = _load_health_report_analysis(step.summary_path, asset_name=step.asset_name)
+    analysis = _workflow_health.load_health_report_analysis(
+        step.summary_path,
+        asset_name=step.asset_name,
+    )
     inspection_stage = str(metadata.get("inspection_stage") or "default").strip() or "default"
     entry = assets.setdefault(
         step.asset_name,
@@ -933,240 +574,30 @@ def _build_patch_refresh_steps(
     ]
 
 
-def _normalize_repair_min_severity(value: str) -> str:
-    text = str(value or "").strip().lower() or "warning"
-    if text not in REPAIR_SEVERITY_RANK:
-        raise SystemExit("--repair-min-severity must be one of: info, warning, error.")
-    return text
-
-
-def _repair_candidate_passes_threshold(candidate: Mapping[str, Any], *, min_severity: str) -> bool:
-    candidate_severity = str(candidate.get("max_severity") or "info").strip().lower() or "info"
-    return REPAIR_SEVERITY_RANK.get(candidate_severity, -1) >= REPAIR_SEVERITY_RANK[min_severity]
-
-
-def _load_repair_source_report(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise SystemExit(f"Repair source report not found: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise SystemExit(f"Repair source report must be a JSON object: {path}")
-    return payload
-
-
-def _repair_source_kind(*, only_unresolved: bool) -> str:
-    return "remaining_repair_candidates" if only_unresolved else "repair_candidates"
-
-
-def _clone_candidate_list(items: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    return [dict(item) for item in items]
-
-
-def _repair_source_candidates(
-    source_report: Mapping[str, Any],
-    *,
-    asset_name: str,
-    only_unresolved: bool,
-) -> tuple[list[dict[str, Any]], str]:
-    inspect_assets = source_report.get("inspect", {}).get("assets")
-    if not isinstance(inspect_assets, Mapping):
-        raise SystemExit("Repair source report does not contain inspect.assets.")
-    asset_payload = inspect_assets.get(asset_name)
-    if not isinstance(asset_payload, Mapping):
-        return [], _repair_source_kind(only_unresolved=only_unresolved)
-
-    if only_unresolved:
-        remaining_assets = source_report.get("repair", {}).get("remaining_candidates", {}).get("assets")
-        if isinstance(remaining_assets, Mapping):
-            remaining_payload = remaining_assets.get(asset_name)
-            if isinstance(remaining_payload, Mapping):
-                candidates = remaining_payload.get("repair_candidates")
-                if isinstance(candidates, list):
-                    return _clone_candidate_list(
-                        [item for item in candidates if isinstance(item, Mapping)]
-                    ), "repair.remaining_candidates"
-        candidates = asset_payload.get("post_repair_repair_candidates")
-        if isinstance(candidates, list):
-            return _clone_candidate_list(
-                [item for item in candidates if isinstance(item, Mapping)]
-            ), "inspect.post_repair_repair_candidates"
-        return [], _repair_source_kind(only_unresolved=True)
-
-    candidates = asset_payload.get("repair_candidates")
-    if not isinstance(candidates, list):
-        return [], "inspect.repair_candidates"
-    return _clone_candidate_list(
-        [item for item in candidates if isinstance(item, Mapping)]
-    ), "inspect.repair_candidates"
-
-
-def _repair_unresolved_source_available(source_report: Mapping[str, Any]) -> bool:
-    remaining_assets = source_report.get("repair", {}).get("remaining_candidates", {}).get("assets")
-    if isinstance(remaining_assets, Mapping):
-        return True
-    inspect_assets = source_report.get("inspect", {}).get("assets")
-    if not isinstance(inspect_assets, Mapping):
-        return False
-    return any(
-        isinstance(asset_payload, Mapping) and isinstance(asset_payload.get("post_repair_repair_candidates"), list)
-        for asset_payload in inspect_assets.values()
-    )
-
-
-def _asset_path_from_bundle(bundle: SnapshotBundle, asset_name: str) -> Path:
-    mapping = {
-        "daily": bundle.daily_dir,
-        "valuation": bundle.valuation_dir,
-        "ex_factors": bundle.ex_factors_dir,
-        "dividends": bundle.dividends_dir,
-        "shares": bundle.shares_dir,
-    }
-    if asset_name not in mapping:
-        raise SystemExit(f"Repair is not supported for asset: {asset_name}")
-    return mapping[asset_name]
-
-
-def _repair_command_name(asset_name: str) -> str:
-    mapping = {
-        "daily": "mirror-hk-daily",
-        "valuation": "mirror-hk-valuation",
-        "ex_factors": "mirror-hk-ex-factors",
-        "dividends": "mirror-hk-dividends",
-        "shares": "mirror-hk-shares",
-    }
-    if asset_name not in mapping:
-        raise SystemExit(f"Repair is not supported for asset: {asset_name}")
-    return mapping[asset_name]
-
-
-def _repair_symbols_file_path(args: argparse.Namespace, *, asset_name: str) -> Path:
-    return args.reports_dir / "repair_inputs" / f"{asset_name}_{args.target_date}_repair_symbols.txt"
-
-
-def _repair_patch_snapshot_path(refreshed_path: Path) -> Path:
-    return refreshed_path.parent / f"{refreshed_path.name}__repair"
-
-
-def _candidate_window_bounds(candidate: Mapping[str, Any]) -> tuple[str | None, str | None]:
-    trade_date = str(candidate.get("trade_date") or "").strip() or None
-    start_date = str(candidate.get("start_date") or "").strip() or None
-    end_date = str(candidate.get("end_date") or "").strip() or None
-    return trade_date or start_date or end_date, trade_date or end_date or start_date
-
-
-def _write_repair_symbols_file(path: Path, *, symbols: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(f"{symbol}\n" for symbol in symbols), encoding="utf-8")
-
-
-def _repair_candidates_from_steps(steps: list[Step]) -> dict[str, list[dict[str, Any]]]:
-    assets: dict[str, list[dict[str, Any]]] = {}
-    for step in steps:
-        if step.phase != "repair" or not step.asset_name:
-            continue
-        metadata = step.report_metadata or {}
-        if str(metadata.get("action") or "") != "patch_fetch":
-            continue
-        candidates = metadata.get("candidates")
-        if not isinstance(candidates, list):
-            continue
-        assets[step.asset_name] = _clone_candidate_list(
-            [item for item in candidates if isinstance(item, Mapping)]
-        )
-    return assets
-
-
-def _build_repair_candidate_payload(
-    *,
-    args: argparse.Namespace,
-    source_report: Path,
-    source_kind: str,
-    candidates_by_asset: Mapping[str, list[dict[str, Any]]],
-    report_path: Path,
-) -> dict[str, Any]:
-    assets_payload: dict[str, Any] = {}
-    total = 0
-    for asset_name, candidates in candidates_by_asset.items():
-        symbols = sorted({str(item.get("symbol") or "").strip() for item in candidates if str(item.get("symbol") or "").strip()})
-        assets_payload[asset_name] = {
-            "asset_name": asset_name,
-            "candidate_count": len(candidates),
-            "symbols": symbols,
-            "repair_candidates": _clone_candidate_list(candidates),
-        }
-        total += len(candidates)
-    return {
-        "target_date": args.target_date,
-        "source_report": str(source_report),
-        "source_kind": source_kind,
-        "min_severity": args.repair_min_severity,
-        "candidate_count": total,
-        "assets": assets_payload,
-        "report_path": str(report_path),
-    }
-
-
-def _build_remaining_repair_candidates_payload(
-    *,
-    args: argparse.Namespace,
-    workflow_report: Mapping[str, Any],
-    report_path: Path,
-) -> dict[str, Any] | None:
-    inspect_assets = workflow_report.get("inspect", {}).get("assets")
-    if not isinstance(inspect_assets, Mapping):
-        return None
-    assets_payload: dict[str, Any] = {}
-    total = 0
-    for asset_name, asset_payload in inspect_assets.items():
-        if not isinstance(asset_payload, Mapping):
-            continue
-        latest_stage = str(asset_payload.get("latest_stage") or "").strip()
-        if latest_stage != "post_repair":
-            continue
-        candidates = asset_payload.get("post_repair_repair_candidates")
-        if not isinstance(candidates, list):
-            continue
-        cloned = _clone_candidate_list([item for item in candidates if isinstance(item, Mapping)])
-        symbols = sorted({str(item.get("symbol") or "").strip() for item in cloned if str(item.get("symbol") or "").strip()})
-        assets_payload[str(asset_name)] = {
-            "asset_name": str(asset_name),
-            "candidate_count": len(cloned),
-            "symbols": symbols,
-            "repair_candidates": cloned,
-        }
-        total += len(cloned)
-    return {
-        "target_date": args.target_date,
-        "source_report": str(args.workflow_report),
-        "source_kind": "inspect.post_repair_repair_candidates",
-        "candidate_count": total,
-        "assets": assets_payload,
-        "report_path": str(report_path),
-    }
-
-
 def _build_repair_steps(
     args: argparse.Namespace,
     *,
     current: SnapshotBundle,
     refreshed: SnapshotBundle,
 ) -> list[Step]:
-    source_report = _load_repair_source_report(args.repair_source_report)
+    source_report = _repair.load_repair_source_report(args.repair_source_report)
     inspect_assets = source_report.get("inspect", {}).get("assets")
     if not isinstance(inspect_assets, Mapping):
         raise SystemExit(
             f"Repair source report does not contain inspect.assets: {args.repair_source_report}"
         )
-    if args.repair_only_unresolved and not _repair_unresolved_source_available(source_report):
+    if args.repair_only_unresolved and not _repair.repair_unresolved_source_available(
+        source_report
+    ):
         raise SystemExit(
             "--repair-only-unresolved requires a source workflow report with "
             "repair.remaining_candidates or inspect.assets.<asset>.post_repair_repair_candidates."
         )
 
-    min_severity = _normalize_repair_min_severity(args.repair_min_severity)
+    min_severity = _repair.normalize_repair_min_severity(args.repair_min_severity)
     steps: list[Step] = []
     for asset_name in _selected_repair_assets(args):
-        raw_candidates, source_kind = _repair_source_candidates(
+        raw_candidates, source_kind = _repair.repair_source_candidates(
             source_report,
             asset_name=asset_name,
             only_unresolved=args.repair_only_unresolved,
@@ -1175,17 +606,23 @@ def _build_repair_steps(
             item
             for item in raw_candidates
             if isinstance(item, Mapping)
-            and _repair_candidate_passes_threshold(item, min_severity=min_severity)
+            and _repair.repair_candidate_passes_threshold(item, min_severity=min_severity)
             and str(item.get("symbol") or "").strip()
         ]
         if not candidates:
             continue
 
-        symbols = sorted({str(item.get("symbol")).strip() for item in candidates if str(item.get("symbol")).strip()})
+        symbols = sorted(
+            {
+                str(item.get("symbol")).strip()
+                for item in candidates
+                if str(item.get("symbol")).strip()
+            }
+        )
         starts: list[str] = []
         ends: list[str] = []
         for item in candidates:
-            start, end = _candidate_window_bounds(item)
+            start, end = _repair.candidate_window_bounds(item)
             if start:
                 starts.append(_normalize_target_date(start))
             if end:
@@ -1195,16 +632,16 @@ def _build_repair_steps(
 
         start_date = min(starts)
         end_date = max(ends)
-        current_path = _asset_path_from_bundle(current, asset_name)
-        refreshed_path = _asset_path_from_bundle(refreshed, asset_name)
-        patch_path = _repair_patch_snapshot_path(refreshed_path)
-        symbols_file = _repair_symbols_file_path(args, asset_name=asset_name)
+        current_path = _repair.asset_path_from_bundle(current, asset_name)
+        refreshed_path = _repair.asset_path_from_bundle(refreshed, asset_name)
+        patch_path = _repair.repair_patch_snapshot_path(refreshed_path)
+        symbols_file = _repair.repair_symbols_file_path(args, asset_name=asset_name)
         if not args.dry_run:
-            _write_repair_symbols_file(symbols_file, symbols=symbols)
+            _repair.write_repair_symbols_file(symbols_file, symbols=symbols)
 
         mirror_command = _rqdata_command(
             args,
-            _repair_command_name(asset_name),
+            _repair.repair_command_name(asset_name),
             "--symbols-file",
             _repo_relative(symbols_file),
             "--start-date",
@@ -1244,7 +681,7 @@ def _build_repair_steps(
             "source_report": args.repair_source_report,
             "source_kind": source_kind,
             "min_severity": min_severity,
-            "candidates": _clone_candidate_list(candidates),
+            "candidates": _repair.clone_candidate_list(candidates),
         }
         steps.extend(
             [
@@ -1287,7 +724,14 @@ def _forward_rqdata_credentials(args: argparse.Namespace) -> list[str]:
 
 
 def _rqdata_command(args: argparse.Namespace, *rest: str) -> list[str]:
-    return [*_platform_executable(), "rqdata", "hk-assets", "--", *rest, *_forward_rqdata_credentials(args)]
+    return [
+        *_platform_executable(),
+        "rqdata",
+        "hk-assets",
+        "--",
+        *rest,
+        *_forward_rqdata_credentials(args),
+    ]
 
 
 def _build_refresh_steps(
@@ -1415,7 +859,9 @@ def _build_refresh_steps(
                     "--",
                     "build-hk-daily-clean-layer",
                     "--asset-dir",
-                    _repo_relative(refreshed.daily_dir if "daily" in selected else current.daily_dir),
+                    _repo_relative(
+                        refreshed.daily_dir if "daily" in selected else current.daily_dir
+                    ),
                     "--out-dir",
                     _repo_relative(refreshed.daily_clean_dir),
                     "--overwrite",
@@ -1493,11 +939,19 @@ def _build_refresh_steps(
                     "--",
                     "build-hk-daily-clean-layer",
                     "--asset-dir",
-                    _repo_relative(refreshed.etf_daily_dir if "etf_daily" in selected else current.etf_daily_dir),
+                    _repo_relative(
+                        refreshed.etf_daily_dir
+                        if "etf_daily" in selected
+                        else current.etf_daily_dir
+                    ),
                     "--out-dir",
                     _repo_relative(refreshed.etf_daily_clean_dir),
                     "--instruments-file",
-                    _repo_relative(refreshed.etf_instruments_file if "etf_instruments" in selected else current.etf_instruments_file),
+                    _repo_relative(
+                        refreshed.etf_instruments_file
+                        if "etf_instruments" in selected
+                        else current.etf_instruments_file
+                    ),
                     "--overwrite",
                 ],
                 alias_target=refreshed.etf_daily_clean_dir,
@@ -1746,7 +1200,9 @@ def _build_package_step(
     if bundle.exchange_rate_dir is not None:
         command.extend(["--exchange-rate-snapshot", _repo_relative(bundle.exchange_rate_dir)])
     if bundle.financial_details_dir is not None:
-        command.extend(["--financial-details-snapshot", _repo_relative(bundle.financial_details_dir)])
+        command.extend(
+            ["--financial-details-snapshot", _repo_relative(bundle.financial_details_dir)]
+        )
     for part_name in _selected_parts(args):
         command.extend(["--part", part_name])
     return Step(phase="package", label="Stage HK asset release parts", command=command)
@@ -1870,7 +1326,9 @@ def _maybe_repoint_alias(step: Step, *, dry_run: bool, repoint_latest: bool) -> 
     if not step.alias_target.exists():
         raise SystemExit(f"Expected refreshed output not found: {step.alias_target}")
     create_relative_symlink(step.alias_target, step.alias_link)
-    print(f"  repointed latest alias: {_repo_relative(step.alias_link)} -> {step.alias_target.name}")
+    print(
+        f"  repointed latest alias: {_repo_relative(step.alias_link)} -> {step.alias_target.name}"
+    )
 
 
 def _is_safe_intermediate_patch_path(path: Path) -> bool:
@@ -1962,7 +1420,11 @@ def _normalize_workflow_args(args: argparse.Namespace) -> None:
         raise SystemExit("--valuation-history-progress-every-symbols must be >= 0.")
     args.package_dest = args.package_dest or _default_package_dest(args.target_date)
     args.tar_dir = args.tar_dir or _default_tar_dir(args.target_date)
-    args.reports_dir = args.reports_dir.resolve() if args.reports_dir.is_absolute() else REPO_ROOT / args.reports_dir
+    args.reports_dir = (
+        args.reports_dir.resolve()
+        if args.reports_dir.is_absolute()
+        else REPO_ROOT / args.reports_dir
+    )
     args.workflow_report = _normalize_report_path(
         args.workflow_report or _default_workflow_report_path(args.target_date),
         base_root=REPO_ROOT,
@@ -1972,9 +1434,13 @@ def _normalize_workflow_args(args: argparse.Namespace) -> None:
         base_root=REPO_ROOT,
     )
     args.package_dest = (
-        args.package_dest.resolve() if args.package_dest.is_absolute() else REPO_ROOT / args.package_dest
+        args.package_dest.resolve()
+        if args.package_dest.is_absolute()
+        else REPO_ROOT / args.package_dest
     )
-    args.tar_dir = args.tar_dir.resolve() if args.tar_dir.is_absolute() else REPO_ROOT / args.tar_dir
+    args.tar_dir = (
+        args.tar_dir.resolve() if args.tar_dir.is_absolute() else REPO_ROOT / args.tar_dir
+    )
 
 
 def _workflow_step_builders() -> _WorkflowStepBuilders:
@@ -2017,11 +1483,7 @@ def _ensure_workflow_output_dirs(args: argparse.Namespace) -> None:
 
 
 def _workflow_gate_stage(steps: Sequence[Step]) -> str | None:
-    inspect_stages = [
-        _step_inspection_stage(step)
-        for step in steps
-        if step.phase == "inspect"
-    ]
+    inspect_stages = [_step_inspection_stage(step) for step in steps if step.phase == "inspect"]
     if "post_repair" in inspect_stages:
         return "post_repair"
     if inspect_stages:
@@ -2052,9 +1514,7 @@ def _init_workflow_gate_state(
     workflow_report.setdefault("gate", {})["enabled"] = enabled
     workflow_report.setdefault("gate", {})["stage"] = stage
     remaining_inspect_steps = sum(
-        1
-        for step in steps
-        if step.phase == "inspect" and _step_inspection_stage(step) == stage
+        1 for step in steps if step.phase == "inspect" and _step_inspection_stage(step) == stage
     )
     return _WorkflowGateState(
         stage=stage,
@@ -2219,7 +1679,7 @@ def _finalize_inspect_gate_if_ready(
         return
     gate_hits = [
         item
-        for item in _suppress_gate_hits_for_clean_daily_consumer_path(
+        for item in _workflow_health.suppress_gate_hits_for_clean_daily_consumer_path(
             gate.results,
             threshold=args.gate_on_severity,
             report=workflow_report,
@@ -2256,7 +1716,7 @@ def _handle_inspect_summary_after_step(
     print("  " + _summarize_report(step.summary_path))
     inspection_stage = _step_inspection_stage(step)
     if gate.enabled and step.phase == "inspect" and inspection_stage == gate.stage:
-        gate_quality = _build_gate_quality_summary(
+        gate_quality = _workflow_health.build_gate_quality_summary(
             step.summary_path,
             threshold=args.gate_on_severity,
         )
@@ -2350,18 +1810,18 @@ def _write_repair_queue_reports(
         return
 
     repair_queue_path = _default_repair_queue_path(args.target_date)
-    repair_queue_payload = _build_repair_candidate_payload(
+    repair_queue_payload = _repair.build_repair_candidate_payload(
         args=args,
         source_report=args.repair_source_report,
-        source_kind=_repair_source_kind(only_unresolved=args.repair_only_unresolved),
-        candidates_by_asset=_repair_candidates_from_steps(repair_steps),
+        source_kind=_repair.repair_source_kind(only_unresolved=args.repair_only_unresolved),
+        candidates_by_asset=_repair.repair_candidates_from_steps(repair_steps),
         report_path=repair_queue_path,
     )
     _write_json_report(repair_queue_path, payload=repair_queue_payload)
     workflow_report.setdefault("repair", {})["queue"] = repair_queue_payload
     if args.repair_rerun_inspect:
         remaining_path = _default_remaining_repair_candidates_path(args.target_date)
-        remaining_payload = _build_remaining_repair_candidates_payload(
+        remaining_payload = _repair.build_remaining_repair_candidates_payload(
             args=args,
             workflow_report=workflow_report,
             report_path=remaining_path,
