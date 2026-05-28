@@ -5,6 +5,7 @@ import argparse
 import os
 import re
 import shutil
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,106 +39,46 @@ AVAILABLE_PART_CHOICES = (
 DEFAULT_PART_CHOICES = tuple(
     part_name for part_name in AVAILABLE_PART_CHOICES if part_name != "announcement"
 )
+RELEASE_PRESETS_DIR = REPO_ROOT / "configs" / "presets" / "release"
 
-PRESETS = {
-    "hk_full": {
-        "default_parts": DEFAULT_PART_CHOICES,
-        "daily_snapshot": "hk_all_2000_20260327_daily_final_latest",
-        "intraday_snapshot": None,
-        "etf_daily_snapshot": None,
-        "etf_instruments_file": None,
-        "valuation_snapshot": "hk_all_valuation_latest",
-        "instruments_file": "hk_all_instruments_20260327.parquet",
-        "pit_snapshot": "hk_all_2000_2025_full_market_latest",
-        "ex_factors_snapshot": "hk_all_2000_20260327_ex_factors_full_market_latest",
-        "dividends_snapshot": "hk_all_2000_20260327_dividends_full_market_latest",
-        "shares_snapshot": "hk_all_2000_20260327_shares_full_market_latest",
-        "exchange_rate_snapshot": "hk_exchange_rate_probe_20250210_20250216",
-        "southbound_snapshot": "hk_connect_southbound_latest",
-        "financial_details_snapshot": "hk_financial_details_hk_all3203_superset_2000_2025_20260319",
-        "announcement_snapshot": None,
-        "industry_changes_snapshot": "hk_all_2000_20260327_industry_changes_full_market_latest",
-        "universe_by_date": "hk_all_full_by_date.csv",
-        "universe_symbols": "hk_all_full_symbols.txt",
-        "universe_meta": "hk_all_full_by_date.meta.yml",
-    },
-    "hk_connect": {
-        "default_parts": DEFAULT_PART_CHOICES,
-        "daily_snapshot": "hk_all_2000_20260327_daily_final_latest",
-        "intraday_snapshot": None,
-        "etf_daily_snapshot": None,
-        "etf_instruments_file": None,
-        "valuation_snapshot": None,
-        "instruments_file": "hk_connect_full_20260326.parquet",
-        "pit_snapshot": "hk_connect_full_2000_2025_full_latest",
-        "ex_factors_snapshot": None,
-        "dividends_snapshot": None,
-        "shares_snapshot": None,
-        "exchange_rate_snapshot": "hk_exchange_rate_probe_20250210_20250216",
-        "southbound_snapshot": "hk_connect_southbound_latest",
-        "financial_details_snapshot": "hk_financial_details_probe_connect_union967_2000_2025_20260319",
-        "announcement_snapshot": None,
-        "industry_changes_snapshot": None,
-        "universe_by_date": "hk_connect_full_by_date.csv",
-        "universe_symbols": "hk_connect_full_symbols.txt",
-        "universe_meta": "hk_connect_full_by_date.meta.yml",
-    },
-    "hk_etf": {
-        "default_parts": ("daily", "instruments"),
-        "daily_snapshot": "hk_etf_2000_20260401_daily_latest",
-        "intraday_snapshot": None,
-        "etf_daily_snapshot": None,
-        "etf_instruments_file": None,
-        "valuation_snapshot": None,
-        "instruments_file": "hk_etf_instruments_latest.parquet",
-        "pit_snapshot": None,
-        "ex_factors_snapshot": None,
-        "dividends_snapshot": None,
-        "shares_snapshot": None,
-        "exchange_rate_snapshot": None,
-        "southbound_snapshot": None,
-        "financial_details_snapshot": None,
-        "announcement_snapshot": None,
-        "industry_changes_snapshot": None,
-        "universe_by_date": None,
-        "universe_symbols": None,
-        "universe_meta": None,
-    },
-    "hk_current": {
-        "default_parts": (
-            "daily",
-            "intraday",
-            "etf",
-            "valuation",
-            "instruments",
-            "pit",
-            "reference",
-            "exchange_rate",
-            "southbound",
-            "financial_details",
-            "industry",
-            "universe",
-        ),
-        "daily_snapshot": "hk_all_daily_clean_latest",
-        "intraday_snapshot": "hk_intraday_latest",
-        "etf_daily_snapshot": "hk_etf_daily_clean_latest",
-        "etf_instruments_file": "hk_etf_instruments_latest.parquet",
-        "valuation_snapshot": "hk_all_valuation_latest",
-        "instruments_file": "hk_all_instruments_latest.parquet",
-        "pit_snapshot": "hk_all_2000_2025_full_market_latest",
-        "ex_factors_snapshot": "hk_all_ex_factors_latest",
-        "dividends_snapshot": "hk_all_dividends_latest",
-        "shares_snapshot": "hk_all_shares_latest",
-        "exchange_rate_snapshot": "hk_exchange_rate_latest",
-        "southbound_snapshot": "hk_connect_southbound_latest",
-        "financial_details_snapshot": "hk_financial_details_latest",
-        "announcement_snapshot": None,
-        "industry_changes_snapshot": "hk_all_industry_changes_latest",
-        "universe_by_date": "hk_all_full_by_date.csv",
-        "universe_symbols": "hk_all_full_symbols.txt",
-        "universe_meta": "hk_all_full_by_date.meta.yml",
-    },
-}
+
+def _normalize_default_parts(value: object, *, source: Path) -> tuple[str, ...]:
+    if value is None:
+        return DEFAULT_PART_CHOICES
+    if isinstance(value, str) or not isinstance(value, list | tuple):
+        raise SystemExit(f"Release preset default_parts must be a list: {source}")
+    parts = tuple(str(item).strip() for item in value if str(item).strip())
+    invalid = [part for part in parts if part not in AVAILABLE_PART_CHOICES]
+    if invalid:
+        raise SystemExit(
+            f"Release preset {source} has unsupported default_parts: {', '.join(invalid)}"
+        )
+    return tuple(dict.fromkeys(parts))
+
+
+def _load_release_preset(path: Path) -> dict[str, object]:
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise SystemExit(f"Release preset must be a mapping: {path}")
+    preset = {str(key): value for key, value in payload.items()}
+    preset["default_parts"] = _normalize_default_parts(
+        preset.get("default_parts"),
+        source=path,
+    )
+    for key in ("daily_snapshot", "instruments_file"):
+        if not str(preset.get(key) or "").strip():
+            raise SystemExit(f"Release preset {path} must define {key}.")
+    return preset
+
+
+def load_release_presets(presets_dir: Path = RELEASE_PRESETS_DIR) -> dict[str, dict[str, object]]:
+    paths = sorted(presets_dir.glob("*.yml")) + sorted(presets_dir.glob("*.yaml"))
+    if not paths:
+        raise SystemExit(f"No release preset files found under: {presets_dir}")
+    return {path.stem: _load_release_preset(path) for path in paths}
+
+
+PRESETS = load_release_presets()
 
 
 def resolve_repo_path(path_text: str | Path) -> Path:

@@ -1,0 +1,31 @@
+default_parts:
+  - daily
+  - intraday
+  - etf
+  - valuation
+  - instruments
+  - pit
+  - reference
+  - exchange_rate
+  - southbound
+  - financial_details
+  - industry
+  - universe
+daily_snapshot: hk_all_2000_20260327_daily_final_latest
+intraday_snapshot: null
+etf_daily_snapshot: null
+etf_instruments_file: null
+valuation_snapshot: hk_all_valuation_latest
+instruments_file: hk_all_instruments_20260327.parquet
+pit_snapshot: hk_all_2000_2025_full_market_latest
+ex_factors_snapshot: hk_all_2000_20260327_ex_factors_full_market_latest
+dividends_snapshot: hk_all_2000_20260327_dividends_full_market_latest
+shares_snapshot: hk_all_2000_20260327_shares_full_market_latest
+exchange_rate_snapshot: hk_exchange_rate_probe_20250210_20250216
+southbound_snapshot: hk_connect_southbound_latest
+financial_details_snapshot: hk_financial_details_hk_all3203_superset_2000_2025_20260319
+announcement_snapshot: null
+industry_changes_snapshot: hk_all_2000_20260327_industry_changes_full_market_latest
+universe_by_date: hk_all_full_by_date.csv
+universe_symbols: hk_all_full_symbols.txt
+universe_meta: hk_all_full_by_date.meta.yml

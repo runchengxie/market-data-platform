@@ -1,0 +1,21 @@
+default_parts:
+  - daily
+  - instruments
+daily_snapshot: hk_etf_2000_20260401_daily_latest
+intraday_snapshot: null
+etf_daily_snapshot: null
+etf_instruments_file: null
+valuation_snapshot: null
+instruments_file: hk_etf_instruments_latest.parquet
+pit_snapshot: null
+ex_factors_snapshot: null
+dividends_snapshot: null
+shares_snapshot: null
+exchange_rate_snapshot: null
+southbound_snapshot: null
+financial_details_snapshot: null
+announcement_snapshot: null
+industry_changes_snapshot: null
+universe_by_date: null
+universe_symbols: null
+universe_meta: null

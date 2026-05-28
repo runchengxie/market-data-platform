@@ -13,7 +13,7 @@
 | `marketdata migration status` | 查看迁移后工作流归属 | 迁移完成后仍像正式功能 | `transition_status()` 长期为空后，改为 docs-only 记录 |
 | `marketdata migration sync-hk-links` | 同步 `cross-sectional-trees` 兼容链接 | 继续强化跨仓库路径耦合 | 下游完全只读消费 current contract 后删除 |
 | `marketdata migration import-cross-artifacts` | 从旧仓库导入历史平台资产 | 一次性迁移命令留在主 CLI | 迁移归档完成后移到 archive 文档或内部脚本 |
-| HK release hardcoded presets | 历史发布包复现 | 运行时代码混入历史 snapshot 名称 | 迁移到 `configs/presets/release/*.yml` |
+| HK release presets | 历史发布包复现，当前位于 `configs/presets/release/*.yml` | 历史 snapshot 名称仍需维护清理 | 定期归档过期 preset，只保留仍需复现或发布的配置 |
 
 ## 维护规则
 

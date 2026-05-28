@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,20 @@ REPAIR_ASSETS = PATCH_MERGE_SUPPORTED_ASSET_ORDER
 DEFAULT_DAILY_PATCH_LOOKBACK_DAYS = 20
 DEFAULT_DATED_PATCH_LOOKBACK_DAYS = 40
 PROVIDER_PERMISSION_EXIT_CODE = 78
+
+
+@dataclass
+class _WorkflowPlan:
+    steps: list[Step]
+    repair_steps: list[Step]
+    selected_mutating_assets: tuple[str, ...]
+    planned_bundle: SnapshotBundle
+
+
+@dataclass
+class _WorkflowExecutionResult:
+    gate_triggered: bool
+    successful_patch_merge_dirs: list[Path]
 
 
 def _normalize_target_date(value: str) -> str:
@@ -2229,9 +2244,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+def _normalize_workflow_args(args: argparse.Namespace) -> None:
     args.target_date = _normalize_target_date(args.target_date)
     args.start_date = _normalize_target_date(args.start_date)
     args.southbound_start_date = _normalize_target_date(args.southbound_start_date)
@@ -2262,15 +2275,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     args.tar_dir = args.tar_dir.resolve() if args.tar_dir.is_absolute() else REPO_ROOT / args.tar_dir
 
-    phases = _phase_selection(args)
-    if "repair" in phases and not args.repair_source_report.exists() and "inspect" in phases:
-        raise SystemExit(
-            "Repair requires an existing workflow report with inspect.assets.repair_candidates. "
-            "Run the workflow once with inspect enabled, then rerun with --phase repair."
-        )
-    workflow_report = _init_workflow_report(args=args, phases=phases)
-    current = _current_snapshot_bundle()
-    refreshed = _refreshed_snapshot_bundle(args.target_date)
+
+def _build_workflow_plan(
+    args: argparse.Namespace,
+    *,
+    phases: tuple[str, ...],
+    current: SnapshotBundle,
+    refreshed: SnapshotBundle,
+    active_bundle: SnapshotBundle,
+) -> _WorkflowPlan:
     selected_refresh_assets = _selected_refresh_assets(args)
     selected_repair_assets = _selected_repair_assets(args)
     planned_refresh_bundle = _planned_bundle(
@@ -2278,7 +2291,6 @@ def main(argv: list[str] | None = None) -> int:
         refreshed,
         selected_refresh_assets=selected_refresh_assets,
     )
-    active_bundle = current
 
     steps: list[Step] = []
     if "refresh" in phases:
@@ -2354,23 +2366,46 @@ def main(argv: list[str] | None = None) -> int:
     if "release" in phases:
         steps.append(_build_release_step(args))
 
-    if not steps:
-        print("No steps selected.")
-        return 0
+    return _WorkflowPlan(
+        steps=steps,
+        repair_steps=repair_steps,
+        selected_mutating_assets=selected_mutating_assets,
+        planned_bundle=planned_bundle,
+    )
 
-    if not args.dry_run:
-        args.reports_dir.mkdir(parents=True, exist_ok=True)
-        args.package_dest.parent.mkdir(parents=True, exist_ok=True)
-        args.tar_dir.parent.mkdir(parents=True, exist_ok=True)
-        if args.workflow_report is not None:
-            args.workflow_report.parent.mkdir(parents=True, exist_ok=True)
 
+def _ensure_workflow_output_dirs(args: argparse.Namespace) -> None:
+    if args.dry_run:
+        return
+    args.reports_dir.mkdir(parents=True, exist_ok=True)
+    args.package_dest.parent.mkdir(parents=True, exist_ok=True)
+    args.tar_dir.parent.mkdir(parents=True, exist_ok=True)
+    if args.workflow_report is not None:
+        args.workflow_report.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _workflow_gate_stage(steps: Sequence[Step]) -> str | None:
     inspect_stages = [
         str((step.report_metadata or {}).get("inspection_stage") or "default")
         for step in steps
         if step.phase == "inspect"
     ]
-    gate_stage = "post_repair" if "post_repair" in inspect_stages else ("default" if inspect_stages else None)
+    if "post_repair" in inspect_stages:
+        return "post_repair"
+    if inspect_stages:
+        return "default"
+    return None
+
+
+def _run_workflow_steps(
+    *,
+    args: argparse.Namespace,
+    phases: tuple[str, ...],
+    steps: list[Step],
+    workflow_report: dict[str, Any],
+    active_bundle: SnapshotBundle,
+) -> _WorkflowExecutionResult:
+    gate_stage = _workflow_gate_stage(steps)
     gate_enabled = bool(
         gate_stage
         and _workflow_gate_enabled(
@@ -2522,46 +2557,78 @@ def main(argv: list[str] | None = None) -> int:
         if not args.dry_run:
             _record_step_report(workflow_report, step=step, result=result)
 
-    if not args.dry_run and repair_steps:
-        repair_queue_path = _default_repair_queue_path(args.target_date)
-        repair_queue_payload = _build_repair_candidate_payload(
-            args=args,
-            source_report=args.repair_source_report,
-            source_kind=_repair_source_kind(only_unresolved=args.repair_only_unresolved),
-            candidates_by_asset=_repair_candidates_from_steps(repair_steps),
-            report_path=repair_queue_path,
-        )
-        _write_json_report(repair_queue_path, payload=repair_queue_payload)
-        workflow_report.setdefault("repair", {})["queue"] = repair_queue_payload
-        if args.repair_rerun_inspect:
-            remaining_path = _default_remaining_repair_candidates_path(args.target_date)
-            remaining_payload = _build_remaining_repair_candidates_payload(
-                args=args,
-                workflow_report=workflow_report,
-                report_path=remaining_path,
-            )
-            if remaining_payload is not None:
-                _write_json_report(remaining_path, payload=remaining_payload)
-                workflow_report.setdefault("repair", {})["remaining_candidates"] = remaining_payload
+    return _WorkflowExecutionResult(
+        gate_triggered=gate_triggered,
+        successful_patch_merge_dirs=successful_patch_merge_dirs,
+    )
 
+
+def _write_repair_queue_reports(
+    *,
+    args: argparse.Namespace,
+    repair_steps: list[Step],
+    workflow_report: dict[str, Any],
+) -> None:
+    if args.dry_run or not repair_steps:
+        return
+
+    repair_queue_path = _default_repair_queue_path(args.target_date)
+    repair_queue_payload = _build_repair_candidate_payload(
+        args=args,
+        source_report=args.repair_source_report,
+        source_kind=_repair_source_kind(only_unresolved=args.repair_only_unresolved),
+        candidates_by_asset=_repair_candidates_from_steps(repair_steps),
+        report_path=repair_queue_path,
+    )
+    _write_json_report(repair_queue_path, payload=repair_queue_payload)
+    workflow_report.setdefault("repair", {})["queue"] = repair_queue_payload
+    if args.repair_rerun_inspect:
+        remaining_path = _default_remaining_repair_candidates_path(args.target_date)
+        remaining_payload = _build_remaining_repair_candidates_payload(
+            args=args,
+            workflow_report=workflow_report,
+            report_path=remaining_path,
+        )
+        if remaining_payload is not None:
+            _write_json_report(remaining_path, payload=remaining_payload)
+            workflow_report.setdefault("repair", {})["remaining_candidates"] = remaining_payload
+
+
+def _write_current_asset_contracts(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+) -> None:
+    if args.dry_run:
+        return
+    current_contract_path = default_hk_current_contract_path(ASSETS_ROOT.parent)
+    dataset_registry_path = default_dataset_registry_path(ASSETS_ROOT.parent)
+    current_contract_payload = build_hk_current_contract(
+        ASSETS_ROOT.parent,
+        generated_by="hk_asset_workflow",
+        target_date=args.target_date,
+    )
+    write_current_contract(current_contract_path, current_contract_payload)
+    write_dataset_registry(dataset_registry_path, current_contract_payload)
+    workflow_report.setdefault("workflow", {})["current_contract_path"] = str(current_contract_path)
+    workflow_report.setdefault("workflow", {})["dataset_registry_path"] = str(dataset_registry_path)
+
+
+def _finalize_workflow_outputs(
+    *,
+    args: argparse.Namespace,
+    phases: tuple[str, ...],
+    workflow_report: dict[str, Any],
+    gate_triggered: bool,
+    successful_patch_merge_dirs: list[Path],
+) -> int:
     if not args.dry_run and args.prune_successful_patches:
         _prune_successful_patch_dirs(
             successful_patch_merge_dirs,
             report=workflow_report,
         )
 
-    if not args.dry_run:
-        current_contract_path = default_hk_current_contract_path(ASSETS_ROOT.parent)
-        dataset_registry_path = default_dataset_registry_path(ASSETS_ROOT.parent)
-        current_contract_payload = build_hk_current_contract(
-            ASSETS_ROOT.parent,
-            generated_by="hk_asset_workflow",
-            target_date=args.target_date,
-        )
-        write_current_contract(current_contract_path, current_contract_payload)
-        write_dataset_registry(dataset_registry_path, current_contract_payload)
-        workflow_report.setdefault("workflow", {})["current_contract_path"] = str(current_contract_path)
-        workflow_report.setdefault("workflow", {})["dataset_registry_path"] = str(dataset_registry_path)
+    _write_current_asset_contracts(args=args, workflow_report=workflow_report)
 
     if not args.dry_run and args.workflow_report is not None:
         _write_workflow_report(args.workflow_report, report=workflow_report)
@@ -2578,6 +2645,56 @@ def main(argv: list[str] | None = None) -> int:
         f"package_dest={_repo_relative(args.package_dest)}",
     )
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    _normalize_workflow_args(args)
+
+    phases = _phase_selection(args)
+    if "repair" in phases and not args.repair_source_report.exists() and "inspect" in phases:
+        raise SystemExit(
+            "Repair requires an existing workflow report with inspect.assets.repair_candidates. "
+            "Run the workflow once with inspect enabled, then rerun with --phase repair."
+        )
+    workflow_report = _init_workflow_report(args=args, phases=phases)
+    current = _current_snapshot_bundle()
+    refreshed = _refreshed_snapshot_bundle(args.target_date)
+    active_bundle = current
+    plan = _build_workflow_plan(
+        args,
+        phases=phases,
+        current=current,
+        refreshed=refreshed,
+        active_bundle=active_bundle,
+    )
+    steps = plan.steps
+
+    if not steps:
+        print("No steps selected.")
+        return 0
+
+    _ensure_workflow_output_dirs(args)
+    execution = _run_workflow_steps(
+        args=args,
+        phases=phases,
+        steps=steps,
+        workflow_report=workflow_report,
+        active_bundle=active_bundle,
+    )
+    _write_repair_queue_reports(
+        args=args,
+        repair_steps=plan.repair_steps,
+        workflow_report=workflow_report,
+    )
+    return _finalize_workflow_outputs(
+        args=args,
+        phases=phases,
+        workflow_report=workflow_report,
+        gate_triggered=execution.gate_triggered,
+        successful_patch_merge_dirs=execution.successful_patch_merge_dirs,
+    )
 
 
 if __name__ == "__main__":
