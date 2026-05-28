@@ -98,6 +98,16 @@ class _WorkflowExecutionResult:
     successful_patch_merge_dirs: list[Path]
 
 
+@dataclass
+class _WorkflowGateState:
+    stage: str | None
+    enabled: bool
+    triggered: bool
+    results: list[tuple[Step, dict[str, Any]]]
+    remaining_inspect_steps: int
+    pending_alias_steps: list[Step]
+
+
 def _normalize_target_date(value: str) -> str:
     token = value.replace("-", "").strip()
     if len(token) != 8 or not token.isdigit():
@@ -2386,7 +2396,7 @@ def _ensure_workflow_output_dirs(args: argparse.Namespace) -> None:
 
 def _workflow_gate_stage(steps: Sequence[Step]) -> str | None:
     inspect_stages = [
-        str((step.report_metadata or {}).get("inspection_stage") or "default")
+        _step_inspection_stage(step)
         for step in steps
         if step.phase == "inspect"
     ]
@@ -2397,6 +2407,246 @@ def _workflow_gate_stage(steps: Sequence[Step]) -> str | None:
     return None
 
 
+def _step_inspection_stage(step: Step) -> str:
+    return str((step.report_metadata or {}).get("inspection_stage") or "default")
+
+
+def _init_workflow_gate_state(
+    *,
+    args: argparse.Namespace,
+    phases: tuple[str, ...],
+    steps: Sequence[Step],
+    workflow_report: dict[str, Any],
+) -> _WorkflowGateState:
+    stage = _workflow_gate_stage(steps)
+    enabled = bool(
+        stage
+        and _workflow_gate_enabled(
+            phases=phases,
+            threshold=args.gate_on_severity,
+            repair_rerun_inspect=args.repair_rerun_inspect,
+        )
+    )
+    workflow_report.setdefault("gate", {})["enabled"] = enabled
+    workflow_report.setdefault("gate", {})["stage"] = stage
+    remaining_inspect_steps = sum(
+        1
+        for step in steps
+        if step.phase == "inspect" and _step_inspection_stage(step) == stage
+    )
+    return _WorkflowGateState(
+        stage=stage,
+        enabled=enabled,
+        triggered=False,
+        results=[],
+        remaining_inspect_steps=remaining_inspect_steps,
+        pending_alias_steps=[],
+    )
+
+
+def _print_step_header(index: int, total: int, step: Step) -> None:
+    print(f"==> [{index}/{total}] {step.phase}: {step.label}")
+
+
+def _dependency_skip_reason(step: Step, non_actionable_assets: set[str]) -> str | None:
+    dependency_hits = sorted(set(step.depends_on_assets).intersection(non_actionable_assets))
+    if not dependency_hits:
+        return None
+    return "dependency marked non-actionable: " + ", ".join(dependency_hits)
+
+
+def _skip_step_for_dependency(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+    step: Step,
+    reason: str,
+) -> None:
+    print(f"  skipped: {reason}")
+    if not args.dry_run:
+        _record_dependency_skipped_step(workflow_report, step=step, reason=reason)
+
+
+def _skip_step_for_gate(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+    step: Step,
+    gate: _WorkflowGateState,
+) -> bool:
+    if not gate.triggered or step.phase not in {"post_refresh", "package", "release"}:
+        return False
+    reason = f"inspect gate triggered at severity >= {args.gate_on_severity}"
+    print(f"  skipped due to inspect gate: {reason}")
+    if not args.dry_run:
+        if step.phase == "post_refresh":
+            _record_dependency_skipped_step(workflow_report, step=step, reason=reason)
+        else:
+            _record_skipped_step(workflow_report, step=step, reason=reason)
+    return True
+
+
+def _record_nonfatal_step_result(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+    step: Step,
+    result: subprocess.CompletedProcess,
+    non_actionable_assets: set[str],
+) -> None:
+    if step.asset_name:
+        non_actionable_assets.add(step.asset_name)
+        workflow_report.setdefault("workflow", {}).setdefault(
+            "non_actionable_assets",
+            [],
+        ).append(
+            {
+                "asset_name": step.asset_name,
+                "phase": step.phase,
+                "label": step.label,
+                "returncode": int(result.returncode),
+                "reason": "provider_permission_or_boundary_gap",
+            }
+        )
+    print(
+        "  non-actionable provider/boundary gap:",
+        f"asset={step.asset_name}",
+        f"returncode={result.returncode}",
+    )
+    if not args.dry_run:
+        _record_step_report(workflow_report, step=step, result=result)
+
+
+def _record_patch_merge_success(step: Step, successful_patch_merge_dirs: list[Path]) -> None:
+    metadata = step.report_metadata or {}
+    if str(metadata.get("action") or "") != "patch_merge":
+        return
+    patch_path = metadata.get("patch_path")
+    if isinstance(patch_path, Path):
+        successful_patch_merge_dirs.append(patch_path)
+
+
+def _handle_alias_after_step(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+    step: Step,
+    gate: _WorkflowGateState,
+) -> None:
+    should_defer_alias = (
+        gate.enabled
+        and gate.remaining_inspect_steps > 0
+        and not args.no_repoint_latest
+        and step.alias_target is not None
+        and step.alias_link is not None
+    )
+    if should_defer_alias and not args.dry_run:
+        gate.pending_alias_steps.append(step)
+        print(
+            "  deferred latest alias repoint until inspect gate clears:",
+            f"{_repo_relative(step.alias_link)} -> {step.alias_target.name}",
+        )
+    elif gate.triggered:
+        _block_alias_repoint(
+            step,
+            dry_run=args.dry_run,
+            report=workflow_report if not args.dry_run else None,
+            reason=f"inspect gate triggered at severity >= {args.gate_on_severity}",
+        )
+    else:
+        _maybe_repoint_alias(step, dry_run=args.dry_run, repoint_latest=not args.no_repoint_latest)
+
+
+def _release_pending_aliases(
+    *,
+    args: argparse.Namespace,
+    gate: _WorkflowGateState,
+) -> None:
+    for pending_step in gate.pending_alias_steps:
+        _maybe_repoint_alias(
+            pending_step,
+            dry_run=args.dry_run,
+            repoint_latest=not args.no_repoint_latest,
+        )
+    gate.pending_alias_steps.clear()
+
+
+def _block_pending_aliases(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+    gate: _WorkflowGateState,
+) -> None:
+    for pending_step in gate.pending_alias_steps:
+        _block_alias_repoint(
+            pending_step,
+            dry_run=args.dry_run,
+            report=workflow_report,
+            reason=f"inspect gate triggered at severity >= {args.gate_on_severity}",
+        )
+    gate.pending_alias_steps.clear()
+
+
+def _finalize_inspect_gate_if_ready(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+    gate: _WorkflowGateState,
+) -> None:
+    if gate.remaining_inspect_steps != 0:
+        return
+    gate_hits = [
+        item
+        for item in _suppress_gate_hits_for_clean_daily_consumer_path(
+            gate.results,
+            threshold=args.gate_on_severity,
+            report=workflow_report,
+        )
+        if _health_summary_hits_gate(item[1], threshold=args.gate_on_severity)
+    ]
+    if gate_hits:
+        gate.triggered = True
+        for gate_step, gate_quality in gate_hits:
+            _record_gate_trigger(workflow_report, step=gate_step, summary=gate_quality)
+            print(
+                "  inspect gate triggered:",
+                f"asset={gate_step.asset_name}",
+                f"stage={gate.stage}",
+                f"overall_severity={gate_quality.get('overall_severity')}",
+                f"threshold={args.gate_on_severity}",
+            )
+        _block_pending_aliases(args=args, workflow_report=workflow_report, gate=gate)
+    elif gate.pending_alias_steps:
+        _release_pending_aliases(args=args, gate=gate)
+
+
+def _handle_inspect_summary_after_step(
+    *,
+    args: argparse.Namespace,
+    workflow_report: dict[str, Any],
+    step: Step,
+    gate: _WorkflowGateState,
+) -> None:
+    if step.summary_path is None or args.dry_run:
+        return
+    if not step.summary_path.exists():
+        raise SystemExit(f"Expected health report not found: {step.summary_path}")
+    print("  " + _summarize_report(step.summary_path))
+    inspection_stage = _step_inspection_stage(step)
+    if gate.enabled and step.phase == "inspect" and inspection_stage == gate.stage:
+        gate_quality = _build_gate_quality_summary(
+            step.summary_path,
+            threshold=args.gate_on_severity,
+        )
+        gate.results.append((step, gate_quality))
+        gate.remaining_inspect_steps = max(0, gate.remaining_inspect_steps - 1)
+        _finalize_inspect_gate_if_ready(
+            args=args,
+            workflow_report=workflow_report,
+            gate=gate,
+        )
+
+
 def _run_workflow_steps(
     *,
     args: argparse.Namespace,
@@ -2405,160 +2655,65 @@ def _run_workflow_steps(
     workflow_report: dict[str, Any],
     active_bundle: SnapshotBundle,
 ) -> _WorkflowExecutionResult:
-    gate_stage = _workflow_gate_stage(steps)
-    gate_enabled = bool(
-        gate_stage
-        and _workflow_gate_enabled(
-            phases=phases,
-            threshold=args.gate_on_severity,
-            repair_rerun_inspect=args.repair_rerun_inspect,
-        )
+    gate = _init_workflow_gate_state(
+        args=args,
+        phases=phases,
+        steps=steps,
+        workflow_report=workflow_report,
     )
-    workflow_report.setdefault("gate", {})["enabled"] = gate_enabled
-    workflow_report.setdefault("gate", {})["stage"] = gate_stage
-    gate_triggered = False
-    gate_results: list[tuple[Step, dict[str, Any]]] = []
-    remaining_gate_inspect_steps = sum(
-        1
-        for step in steps
-        if step.phase == "inspect"
-        and str((step.report_metadata or {}).get("inspection_stage") or "default") == gate_stage
-    )
-    pending_alias_steps: list[Step] = []
     non_actionable_assets: set[str] = set()
     successful_patch_merge_dirs: list[Path] = []
 
     for index, step in enumerate(steps, start=1):
-        dependency_hits = sorted(set(step.depends_on_assets).intersection(non_actionable_assets))
-        if dependency_hits:
-            reason = "dependency marked non-actionable: " + ", ".join(dependency_hits)
-            print(f"==> [{index}/{len(steps)}] {step.phase}: {step.label}")
-            print(f"  skipped: {reason}")
-            if not args.dry_run:
-                _record_dependency_skipped_step(workflow_report, step=step, reason=reason)
+        _print_step_header(index, len(steps), step)
+        dependency_skip_reason = _dependency_skip_reason(step, non_actionable_assets)
+        if dependency_skip_reason is not None:
+            _skip_step_for_dependency(
+                args=args,
+                workflow_report=workflow_report,
+                step=step,
+                reason=dependency_skip_reason,
+            )
             continue
-        if gate_triggered and step.phase in {"post_refresh", "package", "release"}:
-            reason = f"inspect gate triggered at severity >= {args.gate_on_severity}"
-            print(f"==> [{index}/{len(steps)}] {step.phase}: {step.label}")
-            print(f"  skipped due to inspect gate: {reason}")
-            if not args.dry_run:
-                if step.phase == "post_refresh":
-                    _record_dependency_skipped_step(workflow_report, step=step, reason=reason)
-                else:
-                    _record_skipped_step(workflow_report, step=step, reason=reason)
+        if _skip_step_for_gate(
+            args=args,
+            workflow_report=workflow_report,
+            step=step,
+            gate=gate,
+        ):
             continue
-        print(f"==> [{index}/{len(steps)}] {step.phase}: {step.label}")
         result = _run(step.command, dry_run=args.dry_run)
         if result.returncode != 0:
             if result.returncode in step.nonfatal_returncodes:
-                if step.asset_name:
-                    non_actionable_assets.add(step.asset_name)
-                    workflow_report.setdefault("workflow", {}).setdefault(
-                        "non_actionable_assets",
-                        [],
-                    ).append(
-                        {
-                            "asset_name": step.asset_name,
-                            "phase": step.phase,
-                            "label": step.label,
-                            "returncode": int(result.returncode),
-                            "reason": "provider_permission_or_boundary_gap",
-                        }
-                    )
-                print(
-                    "  non-actionable provider/boundary gap:",
-                    f"asset={step.asset_name}",
-                    f"returncode={result.returncode}",
+                _record_nonfatal_step_result(
+                    args=args,
+                    workflow_report=workflow_report,
+                    step=step,
+                    result=result,
+                    non_actionable_assets=non_actionable_assets,
                 )
-                if not args.dry_run:
-                    _record_step_report(workflow_report, step=step, result=result)
                 continue
             raise SystemExit(result.returncode)
 
-        metadata = step.report_metadata or {}
-        if str(metadata.get("action") or "") == "patch_merge":
-            patch_path = metadata.get("patch_path")
-            if isinstance(patch_path, Path):
-                successful_patch_merge_dirs.append(patch_path)
-
-        should_defer_alias = (
-            gate_enabled
-            and remaining_gate_inspect_steps > 0
-            and not args.no_repoint_latest
-            and step.alias_target is not None
-            and step.alias_link is not None
+        _record_patch_merge_success(step, successful_patch_merge_dirs)
+        _handle_alias_after_step(
+            args=args,
+            workflow_report=workflow_report,
+            step=step,
+            gate=gate,
         )
-        if should_defer_alias and not args.dry_run:
-            pending_alias_steps.append(step)
-            print(
-                "  deferred latest alias repoint until inspect gate clears:",
-                f"{_repo_relative(step.alias_link)} -> {step.alias_target.name}",
-            )
-        elif gate_triggered:
-            _block_alias_repoint(
-                step,
-                dry_run=args.dry_run,
-                report=workflow_report if not args.dry_run else None,
-                reason=f"inspect gate triggered at severity >= {args.gate_on_severity}",
-            )
-        else:
-            _maybe_repoint_alias(step, dry_run=args.dry_run, repoint_latest=not args.no_repoint_latest)
-
         active_bundle = _update_active_bundle(active_bundle, step)
-        if step.summary_path is not None and not args.dry_run:
-            if not step.summary_path.exists():
-                raise SystemExit(f"Expected health report not found: {step.summary_path}")
-            print("  " + _summarize_report(step.summary_path))
-            inspection_stage = str((step.report_metadata or {}).get("inspection_stage") or "default")
-            if gate_enabled and step.phase == "inspect" and inspection_stage == gate_stage:
-                gate_quality = _build_gate_quality_summary(
-                    step.summary_path,
-                    threshold=args.gate_on_severity,
-                )
-                gate_results.append((step, gate_quality))
-                remaining_gate_inspect_steps = max(0, remaining_gate_inspect_steps - 1)
-                if remaining_gate_inspect_steps == 0:
-                    gate_hits = [
-                        item
-                        for item in _suppress_gate_hits_for_clean_daily_consumer_path(
-                            gate_results,
-                            threshold=args.gate_on_severity,
-                            report=workflow_report,
-                        )
-                        if _health_summary_hits_gate(item[1], threshold=args.gate_on_severity)
-                    ]
-                    if gate_hits:
-                        gate_triggered = True
-                        for gate_step, gate_quality in gate_hits:
-                            _record_gate_trigger(workflow_report, step=gate_step, summary=gate_quality)
-                            print(
-                                "  inspect gate triggered:",
-                                f"asset={gate_step.asset_name}",
-                                f"stage={gate_stage}",
-                                f"overall_severity={gate_quality.get('overall_severity')}",
-                                f"threshold={args.gate_on_severity}",
-                            )
-                        for pending_step in pending_alias_steps:
-                            _block_alias_repoint(
-                                pending_step,
-                                dry_run=args.dry_run,
-                                report=workflow_report,
-                                reason=f"inspect gate triggered at severity >= {args.gate_on_severity}",
-                            )
-                        pending_alias_steps.clear()
-                    elif pending_alias_steps:
-                        for pending_step in pending_alias_steps:
-                            _maybe_repoint_alias(
-                                pending_step,
-                                dry_run=args.dry_run,
-                                repoint_latest=not args.no_repoint_latest,
-                            )
-                        pending_alias_steps.clear()
+        _handle_inspect_summary_after_step(
+            args=args,
+            workflow_report=workflow_report,
+            step=step,
+            gate=gate,
+        )
         if not args.dry_run:
             _record_step_report(workflow_report, step=step, result=result)
 
     return _WorkflowExecutionResult(
-        gate_triggered=gate_triggered,
+        gate_triggered=gate.triggered,
         successful_patch_merge_dirs=successful_patch_merge_dirs,
     )
 

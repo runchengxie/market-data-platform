@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import subprocess
+from typing import Any
+
 from market_data_platform.release_tools import hk_asset_workflow as workflow
 
 
@@ -57,3 +60,54 @@ def test_hk_asset_workflow_plan_adds_etf_clean_dependencies():
     ]
     assert refresh_assets == ["etf_instruments", "etf_daily", "etf_daily_clean"]
     assert plan.selected_mutating_assets == ("etf_instruments", "etf_daily", "etf_daily_clean")
+
+
+def test_hk_asset_workflow_nonfatal_step_skips_dependent_steps(monkeypatch, capsys):
+    args = _normalized_args(
+        "--target-date",
+        "20260528",
+        "--phase",
+        "refresh",
+    )
+    current = workflow._current_snapshot_bundle()
+    workflow_report: dict[str, Any] = {}
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], *, dry_run: bool):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, workflow.PROVIDER_PERMISSION_EXIT_CODE)
+
+    monkeypatch.setattr(workflow, "_run", fake_run)
+    steps = [
+        workflow.Step(
+            phase="refresh",
+            label="Mirror HK ETF daily",
+            command=["fetch-etf"],
+            asset_name="etf_daily",
+            nonfatal_returncodes=(workflow.PROVIDER_PERMISSION_EXIT_CODE,),
+        ),
+        workflow.Step(
+            phase="refresh",
+            label="Build HK ETF daily clean layer",
+            command=["clean-etf"],
+            asset_name="etf_daily_clean",
+            depends_on_assets=("etf_daily",),
+        ),
+    ]
+
+    result = workflow._run_workflow_steps(
+        args=args,
+        phases=("refresh",),
+        steps=steps,
+        workflow_report=workflow_report,
+        active_bundle=current,
+    )
+
+    output = capsys.readouterr().out
+
+    assert result.gate_triggered is False
+    assert calls == [["fetch-etf"]]
+    assert "non-actionable provider/boundary gap" in output
+    assert "skipped: dependency marked non-actionable: etf_daily" in output
+    assert workflow_report["workflow"]["non_actionable_assets"][0]["asset_name"] == "etf_daily"
+    assert workflow_report["workflow"]["skipped_steps"][0]["asset_name"] == "etf_daily_clean"
