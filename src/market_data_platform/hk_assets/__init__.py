@@ -10,7 +10,6 @@ from importlib import import_module
 from types import ModuleType
 
 from market_data_platform.artifacts import RQDATA_ASSETS_DIR as DEFAULT_RQDATA_ASSETS_DIR
-from . import args as _args
 from ._public_exports import PUBLIC_API_EXPORTS
 
 DEFAULT_OUT_ROOT = DEFAULT_RQDATA_ASSETS_DIR.as_posix()
@@ -18,15 +17,6 @@ DEFAULT_BATCH_SIZE = 20
 DEFAULT_MIRROR_MAX_ATTEMPTS = 3
 DEFAULT_MIRROR_BACKOFF_SECONDS = 1.0
 DEFAULT_MIRROR_MAX_BACKOFF_SECONDS = 30.0
-
-
-def _resolve_fields(args) -> tuple[list[str], dict]:
-    from .shared import _load_hk_financial_fields, _resolve_fields_with_overrides
-
-    return _resolve_fields_with_overrides(
-        args,
-        load_hk_financial_fields_override=_load_hk_financial_fields,
-    )
 
 
 _PUBLIC_API_MODULE: ModuleType | None = None
