@@ -48,6 +48,9 @@ PRESET_DEFAULTS: dict[str, dict[str, str]] = {
         "symbol_col": "symbol",
     },
 }
+ARTIFACTS_ROOT_HELP = (
+    "Default: DATA_PLATFORM_ROOT, HK_DATA_PLATFORM_ROOT, CSTREE_ARTIFACTS_ROOT, or artifacts/."
+)
 
 FREQUENCY_ALIASES = {
     "D": "D",
@@ -1002,9 +1005,7 @@ def add_catalog_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--artifacts-root",
         default=None,
-        help=(
-            "Artifacts root to scan. Default: CSTREE_ARTIFACTS_ROOT or artifacts/."
-        ),
+        help=f"Artifacts root to scan. {ARTIFACTS_ROOT_HELP}",
     )
     parser.add_argument(
         "--db-path",
@@ -1022,9 +1023,7 @@ def add_materialize_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--artifacts-root",
         default=None,
-        help=(
-            "Artifacts root used for default outputs. Default: CSTREE_ARTIFACTS_ROOT or artifacts/."
-        ),
+        help=f"Artifacts root used for default outputs. {ARTIFACTS_ROOT_HELP}",
     )
     parser.add_argument(
         "--name",
@@ -1085,8 +1084,8 @@ def add_query_args(parser: argparse.ArgumentParser) -> None:
         "--artifacts-root",
         default=None,
         help=(
-            "Artifacts root used for default metadata and standardized paths. Default: "
-            "CSTREE_ARTIFACTS_ROOT, or artifacts/."
+            "Artifacts root used for default metadata and standardized paths. "
+            f"{ARTIFACTS_ROOT_HELP}"
         ),
     )
     parser.add_argument(

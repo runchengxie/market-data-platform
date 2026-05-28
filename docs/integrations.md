@@ -13,7 +13,7 @@
 export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-这样配置可将策略的运行结果、缓存和报告输出保留在策略代码仓库本地，同时将市场数据输入路径指向共享的数据根目录。请注意：仅当您希望将策略项目的默认输出也写入该数据平台根目录时，才需要将 `CSTREE_ARTIFACTS_ROOT` 或 `paths.artifacts_root` 指向平台根目录。
+这样配置可将策略的运行结果、缓存和报告输出保留在策略代码仓库本地，同时将市场数据输入路径指向共享的数据根目录。只有在希望把策略项目的默认输出也写入该数据平台根目录时，才需要将 `CSTREE_ARTIFACTS_ROOT` 或 `paths.artifacts_root` 指向平台根目录。
 
 覆盖默认输出路径：
 
@@ -71,9 +71,9 @@ marketdata contract build \
 
 ---
 
-## 规划中的交易成本模型 (Future execution_cost_model)
+## 规划中的交易成本模型
 
-交易成本模型应当作为一种轻量级的衍生数据资产来提供，而不是让策略直接去读取底层原始的 Tick Parquet 文件。该模型资产需明确记录以下元数据信息：
+`execution_cost_model` 当前是预留的衍生资产键，路径规范和 current contract 已支持登记；正式构建流程尚未在平台内落地。后续交易成本模型应作为轻量级衍生数据资产提供，策略层不应直接读取底层 Tick Parquet 文件。该模型资产需明确记录以下元数据信息：
 
 * 模型校准窗口期 (calibration window)
 * 数据源依赖（所依赖的 Tick 级深度数据和日内数据资产）

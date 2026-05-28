@@ -169,6 +169,19 @@ def _add_data_parser(subparsers: argparse._SubParsersAction) -> None:
     data_warehouse.add_query_args(query)
 
 
+def _add_backup_parser(subparsers: argparse._SubParsersAction) -> None:
+    from market_data_platform.backup_data import add_backup_data_args
+
+    parser = subparsers.add_parser(
+        "backup-data",
+        help=(
+            "Create a private local snapshot of caches, universe files, configs, "
+            "or HK current assets."
+        ),
+    )
+    add_backup_data_args(parser)
+
+
 def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("rqdata", help="RQData mirror/export helpers.")
     rqdata_subparsers = parser.add_subparsers(dest="rqdata_command", required=True)
@@ -568,6 +581,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_contract_parser(subparsers)
     _add_registry_parser(subparsers)
     _add_data_parser(subparsers)
+    _add_backup_parser(subparsers)
     _add_rqdata_parser(subparsers)
     _add_tushare_parser(subparsers)
     _add_migration_parser(subparsers)
@@ -714,6 +728,12 @@ def _handle_data(args: argparse.Namespace) -> int:
     if args.data_command == "query":
         return int(data_warehouse.query_standardized(args) or 0)
     raise ValueError(f"Unknown data command: {args.data_command}")
+
+
+def _handle_backup_data(args: argparse.Namespace) -> int:
+    from market_data_platform.backup_data import run_backup
+
+    return run_backup(args)
 
 
 def _handle_rqdata(args: argparse.Namespace) -> int:
@@ -966,6 +986,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_registry_build(args)
     if args.command == "data":
         return _handle_data(args)
+    if args.command == "backup-data":
+        return _handle_backup_data(args)
     if args.command == "rqdata":
         return _handle_rqdata(args)
     if args.command == "tushare":

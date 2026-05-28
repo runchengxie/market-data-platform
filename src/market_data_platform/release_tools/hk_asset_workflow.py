@@ -18,18 +18,13 @@ from market_data_platform.current_assets import (
     build_hk_current_contract,
     default_dataset_registry_path,
     default_hk_current_contract_path,
-    write_dataset_registry,
     write_current_contract,
+    write_dataset_registry,
 )
 
 from .hk_asset_workflow_config import (
-    DEFAULT_PACKAGE_PARTS,
-    DEFAULT_PHASES,
-    INSPECT_ASSETS,
     PATCH_MERGE_SUPPORTED_ASSETS,
     PROVIDER_PERMISSION_EXIT_CODE,
-    REFRESH_ASSETS,
-    REPAIR_ASSETS,
 )
 from .hk_asset_workflow_parser import build_parser
 from .hk_asset_workflow_paths import (
@@ -39,27 +34,78 @@ from .hk_asset_workflow_paths import (
     REPORTS_ROOT,
     SnapshotBundle,
     Step,
+)
+from .hk_asset_workflow_paths import (
     current_snapshot_bundle as _current_snapshot_bundle_impl,
+)
+from .hk_asset_workflow_paths import (
     default_remaining_repair_candidates_path as _default_remaining_repair_candidates_path_impl,
+)
+from .hk_asset_workflow_paths import (
     default_repair_queue_path as _default_repair_queue_path_impl,
+)
+from .hk_asset_workflow_paths import (
     default_workflow_report_path as _default_workflow_report_path_impl,
+)
+from .hk_asset_workflow_paths import (
     refreshed_snapshot_bundle as _refreshed_snapshot_bundle_impl,
+)
+from .hk_asset_workflow_planning import (
+    WorkflowStepBuilders as _WorkflowStepBuilders,
+)
+from .hk_asset_workflow_planning import (
+    build_workflow_plan as _build_workflow_plan_impl,
+)
+from .hk_asset_workflow_planning import (
+    phase_selection as _phase_selection,
+)
+from .hk_asset_workflow_planning import (
+    selected_inspect_assets as _selected_inspect_assets,
+)
+from .hk_asset_workflow_planning import (
+    selected_parts as _selected_parts,
+)
+from .hk_asset_workflow_planning import (
+    selected_refresh_assets as _selected_refresh_assets,
+)
+from .hk_asset_workflow_planning import (
+    selected_repair_assets as _selected_repair_assets,
 )
 from .hk_asset_workflow_report import (
     GATE_SEVERITY_RANK,
     REPAIR_SEVERITY_RANK,
+)
+from .hk_asset_workflow_report import (
     health_summary_hits_gate as _health_summary_hits_gate,
+)
+from .hk_asset_workflow_report import (
     init_workflow_report as _init_workflow_report_impl,
+)
+from .hk_asset_workflow_report import (
     record_blocked_alias_update as _record_blocked_alias_update,
+)
+from .hk_asset_workflow_report import (
     record_gate_trigger as _record_gate_trigger,
+)
+from .hk_asset_workflow_report import (
     record_skipped_step as _record_skipped_step,
+)
+from .hk_asset_workflow_report import (
     workflow_gate_enabled as _workflow_gate_enabled,
+)
+from .hk_asset_workflow_report import (
     write_json_report as _write_json_report,
+)
+from .hk_asset_workflow_report import (
     write_workflow_report as _write_workflow_report,
 )
 from .hk_asset_workflow_state import (
     WorkflowExecutionResult as _WorkflowExecutionResult,
+)
+from .hk_asset_workflow_state import (
     WorkflowGateState as _WorkflowGateState,
+)
+from .hk_asset_workflow_state import (
     WorkflowPlan as _WorkflowPlan,
 )
 from .package_assets import create_relative_symlink
@@ -118,51 +164,6 @@ def _run(cmd: list[str], *, dry_run: bool) -> subprocess.CompletedProcess:
         text=True,
         cwd=REPO_ROOT,
     )
-
-
-def _phase_selection(args: argparse.Namespace) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(args.phase or DEFAULT_PHASES))
-
-
-def _selected_refresh_assets(args: argparse.Namespace) -> tuple[str, ...]:
-    selected = list(dict.fromkeys(args.refresh_asset or REFRESH_ASSETS))
-    if "etf_daily_clean" in selected and "etf_daily" not in selected:
-        selected.insert(selected.index("etf_daily_clean"), "etf_daily")
-    if any(asset in selected for asset in ("etf_daily", "etf_daily_clean")) and "etf_instruments" not in selected:
-        insert_at = min(
-            selected.index(asset)
-            for asset in ("etf_daily", "etf_daily_clean")
-            if asset in selected
-        )
-        selected.insert(insert_at, "etf_instruments")
-    return tuple(dict.fromkeys(selected))
-
-
-def _selected_inspect_assets(args: argparse.Namespace) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(args.inspect_asset or INSPECT_ASSETS))
-
-
-def _selected_parts(args: argparse.Namespace) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(args.part or DEFAULT_PACKAGE_PARTS))
-
-
-def _selected_repair_assets(args: argparse.Namespace) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(args.repair_asset or REPAIR_ASSETS))
-
-
-def _should_refresh_universe(
-    args: argparse.Namespace,
-    *,
-    phases: tuple[str, ...],
-    selected_mutating_assets: tuple[str, ...],
-) -> bool:
-    if not bool(getattr(args, "refresh_universe", True)):
-        return False
-    if args.no_repoint_latest:
-        return False
-    if not any(phase in phases for phase in ("refresh", "repair")):
-        return False
-    return "daily_clean" in selected_mutating_assets
 
 
 def _load_asset_manifest(asset_dir: Path, *, asset_name: str) -> dict[str, object]:
@@ -1274,34 +1275,6 @@ def _build_repair_steps(
     return steps
 
 
-def _planned_bundle(
-    current: SnapshotBundle,
-    refreshed: SnapshotBundle,
-    *,
-    selected_refresh_assets: tuple[str, ...],
-) -> SnapshotBundle:
-    payload = current.__dict__.copy()
-    mapping = {
-        "instruments": "instruments_file",
-        "etf_instruments": "etf_instruments_file",
-        "daily": "daily_dir",
-        "daily_clean": "daily_clean_dir",
-        "etf_daily": "etf_daily_dir",
-        "etf_daily_clean": "etf_daily_clean_dir",
-        "valuation": "valuation_dir",
-        "ex_factors": "ex_factors_dir",
-        "dividends": "dividends_dir",
-        "shares": "shares_dir",
-        "industry_changes": "industry_changes_dir",
-        "southbound": "southbound_dir",
-    }
-    for asset_name in selected_refresh_assets:
-        field_name = mapping.get(asset_name)
-        if field_name is not None:
-            payload[field_name] = getattr(refreshed, field_name)
-    return SnapshotBundle(**payload)
-
-
 def _forward_rqdata_credentials(args: argparse.Namespace) -> list[str]:
     forwarded: list[str] = []
     if args.config:
@@ -2004,6 +1977,17 @@ def _normalize_workflow_args(args: argparse.Namespace) -> None:
     args.tar_dir = args.tar_dir.resolve() if args.tar_dir.is_absolute() else REPO_ROOT / args.tar_dir
 
 
+def _workflow_step_builders() -> _WorkflowStepBuilders:
+    return _WorkflowStepBuilders(
+        refresh=_build_refresh_steps,
+        inspect=_build_inspect_steps,
+        repair=_build_repair_steps,
+        universe_refresh=_build_universe_refresh_step,
+        package=_build_package_step,
+        release=_build_release_step,
+    )
+
+
 def _build_workflow_plan(
     args: argparse.Namespace,
     *,
@@ -2012,93 +1996,13 @@ def _build_workflow_plan(
     refreshed: SnapshotBundle,
     active_bundle: SnapshotBundle,
 ) -> _WorkflowPlan:
-    selected_refresh_assets = _selected_refresh_assets(args)
-    selected_repair_assets = _selected_repair_assets(args)
-    planned_refresh_bundle = _planned_bundle(
-        current,
-        refreshed,
-        selected_refresh_assets=selected_refresh_assets,
-    )
-
-    steps: list[Step] = []
-    if "refresh" in phases:
-        steps.extend(_build_refresh_steps(args, current=current, refreshed=refreshed))
-    if "inspect" in phases:
-        inspect_bundle = active_bundle if "refresh" not in phases else planned_refresh_bundle
-        steps.extend(_build_inspect_steps(args, bundle=inspect_bundle))
-    repair_steps: list[Step] = []
-    if "repair" in phases:
-        repair_bundle_current = active_bundle if "refresh" not in phases else planned_refresh_bundle
-        repair_bundle_refreshed = _planned_bundle(
-            repair_bundle_current,
-            refreshed,
-            selected_refresh_assets=selected_repair_assets,
-        )
-        repair_steps = _build_repair_steps(
-            args,
-            current=repair_bundle_current,
-            refreshed=repair_bundle_refreshed,
-        )
-        steps.extend(repair_steps)
-        if args.repair_rerun_inspect and repair_steps:
-            repaired_assets = tuple(
-                dict.fromkeys(
-                    step.asset_name
-                    for step in repair_steps
-                    if step.asset_name in INSPECT_ASSETS
-                )
-            )
-            if args.repair_rerun_inspect_asset:
-                selected_post_repair = set(args.repair_rerun_inspect_asset)
-                repaired_assets = tuple(
-                    asset for asset in repaired_assets if asset in selected_post_repair
-                )
-            if repaired_assets:
-                steps.extend(
-                    _build_inspect_steps(
-                        args,
-                        bundle=repair_bundle_refreshed,
-                        asset_names=repaired_assets,
-                        inspection_stage="post_repair",
-                    )
-                )
-    repair_assets_with_steps = tuple(
-        dict.fromkeys(
-            step.asset_name
-            for step in repair_steps
-            if step.asset_name
-        )
-    )
-    selected_mutating_assets = tuple(
-        dict.fromkeys(
-            [
-                *(selected_refresh_assets if "refresh" in phases else ()),
-                *(repair_assets_with_steps if "repair" in phases else ()),
-            ]
-        )
-    )
-    planned_bundle = _planned_bundle(
-        current,
-        refreshed,
-        selected_refresh_assets=selected_mutating_assets,
-    )
-    if _should_refresh_universe(
+    return _build_workflow_plan_impl(
         args,
         phases=phases,
-        selected_mutating_assets=selected_mutating_assets,
-    ):
-        steps.append(_build_universe_refresh_step(args, bundle=planned_bundle))
-    if "package" in phases:
-        package_bundle = active_bundle if not any(phase in phases for phase in ("refresh", "repair")) else planned_bundle
-        steps.append(_build_package_step(args, bundle=package_bundle))
-    if "release" in phases:
-        steps.append(_build_release_step(args))
-
-    return _WorkflowPlan(
-        steps=steps,
-        repair_steps=repair_steps,
-        selected_mutating_assets=selected_mutating_assets,
-        planned_bundle=planned_bundle,
+        current=current,
+        refreshed=refreshed,
+        active_bundle=active_bundle,
+        builders=_workflow_step_builders(),
     )
 
 

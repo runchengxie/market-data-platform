@@ -3,9 +3,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 import yaml
 
-from market_data_platform import data_warehouse
+from market_data_platform import artifacts, data_warehouse
 from market_data_platform.cli import build_parser
 
 
@@ -380,3 +381,37 @@ def test_marketdata_cli_exposes_data_commands():
 
     assert args.command == "data"
     assert args.data_command == "query"
+
+
+def test_data_warehouse_help_mentions_platform_root_envs(capsys):
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["data", "catalog", "--help"])
+
+    output = capsys.readouterr().out
+    assert "DATA_PLATFORM_ROOT" in output
+    assert "HK_DATA_PLATFORM_ROOT" in output
+    assert "CSTREE_ARTIFACTS_ROOT" in output
+
+
+def test_import_duckdb_missing_dependency_points_to_existing_extra(monkeypatch):
+    def missing_module(_name: str):
+        raise ModuleNotFoundError("No module named 'duckdb'")
+
+    monkeypatch.setattr(data_warehouse, "import_module", missing_module)
+
+    with pytest.raises(SystemExit, match="uv sync --extra duckdb"):
+        data_warehouse._import_duckdb()
+
+
+def test_artifacts_root_prefers_data_platform_env(monkeypatch, tmp_path):
+    platform_root = tmp_path / "platform"
+    hk_root = tmp_path / "hk"
+    legacy_root = tmp_path / "legacy"
+
+    monkeypatch.setenv("DATA_PLATFORM_ROOT", str(platform_root))
+    monkeypatch.setenv("HK_DATA_PLATFORM_ROOT", str(hk_root))
+    monkeypatch.setenv("CSTREE_ARTIFACTS_ROOT", str(legacy_root))
+
+    assert artifacts.resolve_artifacts_root() == platform_root.resolve()

@@ -19,6 +19,21 @@ marketdata rqdata refresh-hk-fundamentals --help
 rqdata-hk-assets --help
 ```
 
+## 命令矩阵
+
+`marketdata rqdata hk-assets -- --help` 当前覆盖以下类别：
+
+| 类别 | 命令 |
+| --- | --- |
+| 基础信息 | `info`, `quota`, `list-hk-financial-fields` |
+| 原始资产镜像 | `export-hk-instruments`, `mirror-hk-daily`, `mirror-hk-valuation`, `mirror-hk-pit-financials`, `patch-hk-pit-financials`, `mirror-hk-financial-details`, `mirror-hk-ex-factors`, `mirror-hk-dividends`, `mirror-hk-shares`, `mirror-hk-exchange-rate`, `mirror-hk-announcement`, `mirror-hk-southbound`, `mirror-hk-instrument-industry`, `mirror-hk-industry-changes` |
+| 派生资产 | `build-hk-pit-fundamentals`, `build-hk-industry-labels`, `build-hk-daily-clean-layer`, `build-hk-intraday-asset`, `sync-hk-intraday` |
+| 检查与修复 | `inspect-hk-pit-coverage`, `inspect-hk-asset-health`, `inspect-hk-current-health`, `inspect-hk-data-assets`, `inspect-hk-intraday-health`, `rebase-hk-asset-metadata` |
+
+较长的发布编排位于 `market_data_platform.release_tools`，常用入口是
+`marketdata rqdata refresh-hk-current`、`refresh-hk-intraday`、
+`refresh-hk-depth` 和 `refresh-hk-fundamentals`。
+
 ## 主要资产
 
 平台侧负责以下 HK 数据资产：

@@ -22,6 +22,9 @@ dev = [
   "pyright>=1.1.390",
   "ruff>=0.8",
 ]
+duckdb = [
+  "duckdb>=1.0",
+]
 hk-depth = [
   "pandas>=2.2",
   "pyarrow>=16",

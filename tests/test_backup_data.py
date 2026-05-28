@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from market_data_platform import backup_data
+from market_data_platform import backup_data, cli
 
 
 def test_backup_data_copies_selected_paths_and_writes_manifest(tmp_path, monkeypatch):
@@ -410,3 +410,32 @@ def test_backup_data_cleans_output_dir_after_copy_failure(tmp_path, monkeypatch)
         backup_data.main(["--name", "broken", "--no-universe"])
 
     assert not snapshot_dir.exists()
+
+
+def test_marketdata_cli_runs_backup_data(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "config.yml").write_text("market: hk\n", encoding="utf-8")
+
+    monkeypatch.chdir(repo_root)
+
+    assert (
+        cli.main(
+            [
+                "backup-data",
+                "--out-root",
+                "artifacts/snapshots",
+                "--name",
+                "cli_snapshot",
+                "--no-cache",
+                "--no-universe",
+                "--include-path",
+                "config.yml",
+            ]
+        )
+        == 0
+    )
+
+    snapshot_dir = repo_root / "artifacts" / "snapshots" / "cli_snapshot"
+    assert (snapshot_dir / "config.yml").exists()
+    assert (snapshot_dir / "manifest.yml").exists()

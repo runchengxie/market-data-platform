@@ -1,8 +1,8 @@
-# 共享数据契约 (Shared Contract)
+# 共享数据契约
 
-## 数据产物根目录 (Artifacts Root)
+## 数据产物根目录
 
-共享的数据产物根目录，划分了数据工具（Data Tooling）与策略代码库（Strategy Repositories）之间的存储边界。
+共享的数据产物根目录用于划分数据工具与策略代码库之间的存储边界。
 
 推荐的环境变量配置：
 
@@ -10,9 +10,9 @@
 export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-`DATA_PLATFORM_ROOT` 是推荐使用的跨项目通用环境变量，用于指定共享市场数据输入路径。`HK_DATA_PLATFORM_ROOT` 仍作为旧 HK 调用方的兼容 fallback 保留。`CSTREE_ARTIFACTS_ROOT` 则用于覆盖策略的输出根目录；**仅当**下游项目需要将运行记录、缓存或报告等输出文件也写入该根目录时，才应使用此变量。
+`DATA_PLATFORM_ROOT` 是推荐使用的跨项目通用环境变量，用于指定共享市场数据输入路径。`HK_DATA_PLATFORM_ROOT` 仍作为旧 HK 调用方的兼容变量保留。`CSTREE_ARTIFACTS_ROOT` 用于覆盖策略输出根目录；下游项目只有在需要把运行记录、缓存或报告也写入共享根目录时才应使用它。
 
-## 当前契约 (Current Contract)
+## 当前数据契约
 
 ```text
 <artifacts_root>/metadata/current_assets/<market>_current.json
@@ -53,7 +53,7 @@ marketdata contract build \
 默认情况下，该命令会同时合并已存在的 HK/CN current contracts 生成
 `metadata/dataset_registry.csv`。如只需写入 JSON 契约，可加 `--no-registry`。
 
-## 数据资产键名 (Asset Keys)
+## 数据资产键名
 
 | 资产键名 (Asset key) | 产物根目录下的默认路径 |
 | --- | --- |
@@ -98,8 +98,7 @@ CN contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此
 | `daily_clean` | `assets/tushare/cn/daily/cn_all_daily_clean_latest` |
 
 不传 `--provider` 的 CN contract 继续使用原有 `rqdata` 布局。单个
-`cn_current.json` 表示当前采纳的 provider，而不是同时汇总多个 provider 的 raw
-快照。
+`cn_current.json` 只表示当前采纳的 provider，不汇总多个 provider 的 raw 快照。
 
 ## 数据集注册表 (Dataset Registry)
 
@@ -107,7 +106,7 @@ CN contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此
 <artifacts_root>/metadata/dataset_registry.csv
 ```
 
-该注册表是一个专为人类阅读设计的精简索引文件，其内容由 `hk_current.json` / `cn_current.json` 和各项数据资产的清单（Manifests）推导生成。它不应被视为数据的单一事实来源（Source of Truth）。
+该注册表是一个专为人类阅读设计的精简索引文件，其内容由 `hk_current.json` / `cn_current.json` 和各项数据资产的数据清单推导生成。当前数据契约才是下游读取路径时的权威入口。
 
 也可以单独重建注册表：
 

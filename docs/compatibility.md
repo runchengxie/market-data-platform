@@ -20,7 +20,7 @@
 1. 新代码优先使用 `marketdata`、`market_data_platform` 和
    `market_data_platform.providers.*`。
 1. 新增兼容层时必须写入本表，说明用途和清理条件。
-1. 迁移类命令不应继续承载新的业务能力；新能力应进入 native workflow。
+1. 迁移类命令不应继续承载新的业务能力；新能力应进入平台原生工作流。
 1. 删除兼容项前先做 repo-local `rg` 审计，并确认下游脚本已经切换。
 
 ## 静态检查债务

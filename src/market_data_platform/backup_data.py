@@ -265,14 +265,7 @@ def add_backup_data_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="marketdata backup-data",
-        description="Create a private local snapshot of caches, universe files, and configs.",
-    )
-    add_backup_data_args(parser)
-    args = parser.parse_args(argv)
-
+def run_backup(args: argparse.Namespace) -> int:
     repo_root = Path.cwd().resolve()
     name = args.name or _default_name()
     out_root = _resolve_path(args.out_root)
@@ -350,3 +343,13 @@ def main(argv: list[str] | None = None) -> int:
         f"({totals['paths']} paths, {totals['files']} files, {totals['bytes']} bytes)"
     )
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="marketdata backup-data",
+        description="Create a private local snapshot of caches, universe files, and configs.",
+    )
+    add_backup_data_args(parser)
+    args = parser.parse_args(argv)
+    return run_backup(args)

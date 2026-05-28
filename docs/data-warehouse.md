@@ -1,6 +1,16 @@
-# Data Warehouse 与标准层
+# 数据目录、标准层与 DuckDB 查询
 
-`marketdata data ...` 负责 manifest-backed catalog、standardized layer 物化和 DuckDB 查询。该能力从 `cross-sectional-trees` 迁入平台仓库，cross 侧的 `cstree data ...` 仅保留兼容入口。
+`marketdata data ...` 负责基于数据清单的目录刷新、标准层物化和 DuckDB 查询。该能力从 `cross-sectional-trees` 迁入平台仓库，cross 侧的 `cstree data ...` 仅保留兼容入口。
+
+默认产物根目录解析顺序为：
+
+```text
+--artifacts-root 参数
+DATA_PLATFORM_ROOT
+HK_DATA_PLATFORM_ROOT
+CSTREE_ARTIFACTS_ROOT
+artifacts/
+```
 
 ## 刷新 Catalog
 
@@ -38,10 +48,16 @@ marketdata data materialize \
 
 ## 查询标准层
 
+查询功能需要安装 DuckDB：
+
+```bash
+uv sync --extra dev --extra duckdb
+```
+
 ```bash
 marketdata data query \
   --artifacts-root "$DATA_PLATFORM_ROOT" \
   --sql "select 1 as value"
 ```
 
-查询时会扫描 standardized manifest 并在 DuckDB 中注册视图。需要把结果写出时使用 `--format` 和 `--out`。
+查询时会扫描标准层的数据清单并在 DuckDB 中注册视图。需要把结果写出时使用 `--format` 和 `--out`。
