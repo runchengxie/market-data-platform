@@ -64,7 +64,7 @@ uv run --extra dev python scripts/dev/maintainability_metrics.py --check-baselin
 1. Ruff / Pyright：`config_utils.py`、`data_provider_contracts.py`、
    `rebalance.py`、`rqdata_cli_common.py`、`symbols.py` 已纳入覆盖，并由
    `quality_debt.PROTECTED_INCLUDED_PATHS` 防止重新排除。
-1. Ruff：继续处理 `data_providers.py`、`data_warehouse.py`、
+1. Ruff：`data_providers.py` 和 `data_warehouse.py` 已恢复覆盖；下一步继续处理
    `release_tools` 和 `hk_assets`，把目录级排除收窄成具体文件问题。
 1. Pyright：优先处理 contracts、paths、manifest、registry、current assets 等边界模块。
 1. Pyright：provider contract 使用 `Protocol`、`TypedDict` 或 dataclass 稳定接口后再扩大覆盖。

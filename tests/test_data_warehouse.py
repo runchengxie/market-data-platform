@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 import yaml
 
-from market_data_platform import artifacts, data_warehouse
+from market_data_platform import artifacts, data_warehouse, warehouse_query
 from market_data_platform.cli import build_parser
 
 
@@ -274,7 +274,7 @@ def test_query_standardized_registers_views_and_renders_json(tmp_path, monkeypat
     )
 
     fake_duckdb = _FakeDuckDBModule(pd.DataFrame([{"value": 1}]))
-    monkeypatch.setattr(data_warehouse, "_import_duckdb", lambda: fake_duckdb)
+    monkeypatch.setattr(warehouse_query, "import_duckdb", lambda: fake_duckdb)
 
     args = SimpleNamespace(
         sql="select 1 as value",
@@ -356,7 +356,7 @@ def test_query_standardized_defaults_follow_artifacts_root(tmp_path, monkeypatch
     )
 
     fake_duckdb = _FakeDuckDBModule(pd.DataFrame([{"value": 1}]))
-    monkeypatch.setattr(data_warehouse, "_import_duckdb", lambda: fake_duckdb)
+    monkeypatch.setattr(warehouse_query, "import_duckdb", lambda: fake_duckdb)
 
     args = SimpleNamespace(
         artifacts_root=str(artifacts_root),
@@ -399,10 +399,10 @@ def test_import_duckdb_missing_dependency_points_to_existing_extra(monkeypatch):
     def missing_module(_name: str):
         raise ModuleNotFoundError("No module named 'duckdb'")
 
-    monkeypatch.setattr(data_warehouse, "import_module", missing_module)
+    monkeypatch.setattr(warehouse_query, "import_module", missing_module)
 
     with pytest.raises(SystemExit, match="uv sync --extra duckdb"):
-        data_warehouse._import_duckdb()
+        warehouse_query.import_duckdb()
 
 
 def test_artifacts_root_prefers_data_platform_env(monkeypatch, tmp_path):

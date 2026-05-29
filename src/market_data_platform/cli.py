@@ -3,14 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from market_data_platform.contract import build_current_contract, write_current_contract
 from market_data_platform.deprecations import warn_deprecated_command
 from market_data_platform.hk_workflows import (
     HK_INSPECT_ASSET_CHOICES,
     HK_REFRESH_ASSET_CHOICES,
-    import_cross_platform_artifacts,
     run_hk_current_health,
     run_hk_current_refresh,
     run_hk_depth_refresh,
@@ -879,11 +878,13 @@ def _handle_migration_sync_hk_links(args: argparse.Namespace) -> int:
 
 
 def _handle_migration_import_cross_artifacts(args: argparse.Namespace) -> int:
+    from scripts.internal.import_cross_artifacts import run_import_cross_artifacts
+
     warn_deprecated_command(
         "marketdata migration import-cross-artifacts",
-        "archived migration documentation or an internal one-off script",
+        "scripts/internal/import_cross_artifacts.py or archived migration documentation",
     )
-    payload = import_cross_platform_artifacts(
+    payload = run_import_cross_artifacts(
         args.artifacts_root,
         cross_artifacts_root=args.cross_artifacts_root,
         workspace_root=args.workspace_root,
@@ -899,7 +900,8 @@ def _handle_migration_import_cross_artifacts(args: argparse.Namespace) -> int:
     print(f"summary: {payload['summary']}")
     if "manifest" in payload:
         print(f"manifest: {payload['manifest']}")
-    for row in payload["items"]:
+    items = cast(list[dict[str, object]], payload["items"])
+    for row in items:
         print(f"{row['status']}: {row['relative_path']} -> {row['target']}")
     return 0
 

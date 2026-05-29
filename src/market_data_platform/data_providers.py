@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Iterable, Mapping, Optional
 
 import numpy as np
 import pandas as pd
@@ -14,22 +12,39 @@ import pandas as pd
 from .artifacts import resolve_data_input_path
 from .data_provider_contracts import (
     SUPPORTED_MARKETS as SUPPORTED_MARKETS,
+)
+from .data_provider_contracts import (
     fundamentals_provider_supported as fundamentals_provider_supported,
+)
+from .data_provider_contracts import (
     normalize_market,
-    require_supported_market as _require_supported_market,
     resolve_provider,
+)
+from .data_provider_contracts import (
+    require_supported_market as _require_supported_market,
+)
+from .data_provider_contracts import (
     to_rqdata_symbol as _to_rqdata_symbol,
 )
-from .symbols import (
-    PROVIDER_SYMBOL_PRIORITY,
-    drop_legacy_symbol_columns,
-    ensure_symbol_columns,
-    normalize_symbol_for_market,
-    normalize_symbol_standard_name,
+from .provider_cache import (
+    basic_cache_file,
+    cache_tag,
+    drop_legacy_symbol_aliases,
+    fundamentals_cache_file,
+    sanitize_cache_tag,
+    write_parquet_cache,
 )
 from .rqdata_runtime import (
     init_rqdatac as _init_rqdatac_runtime,
+)
+from .rqdata_runtime import (
     resolve_rqdatac_init_kwargs as _resolve_rqdatac_init_kwargs_runtime,
+)
+from .symbols import (
+    PROVIDER_SYMBOL_PRIORITY,
+    ensure_symbol_columns,
+    normalize_symbol_for_market,
+    normalize_symbol_standard_name,
 )
 
 logger = logging.getLogger("market_data_platform.data_providers")
@@ -122,7 +137,7 @@ def _ensure_rqdatac_ready(data_cfg: Mapping | None):
     )
 
 
-def _rqdata_default_fields(rq_cfg: Optional[Mapping]) -> Optional[list[str]]:
+def _rqdata_default_fields(rq_cfg: Mapping | None) -> list[str] | None:
     if isinstance(rq_cfg, Mapping) and "fields" in rq_cfg:
         fields = rq_cfg.get("fields")
         if fields is None or fields == "all" or fields == "*":
@@ -131,7 +146,7 @@ def _rqdata_default_fields(rq_cfg: Optional[Mapping]) -> Optional[list[str]]:
     return ["close", "volume", "total_turnover"]
 
 
-def _rqdata_skip_suspended(market: str, rq_cfg: Optional[Mapping]) -> Optional[bool]:
+def _rqdata_skip_suspended(market: str, rq_cfg: Mapping | None) -> bool | None:
     if isinstance(rq_cfg, Mapping) and "skip_suspended" in rq_cfg:
         return bool(rq_cfg.get("skip_suspended"))
     return True if normalize_market(market) == "hk" else None
@@ -184,33 +199,6 @@ def _rqdata_fundamental_fields(fundamentals_cfg: Mapping) -> list[str]:
     return list(DEFAULT_RQDATA_HK_FUNDAMENTAL_FIELDS.values())
 
 
-def _fundamentals_cache_file(
-    cache_dir: Path,
-    market: str,
-    provider: str,
-    symbol: str,
-    start_date: str,
-    end_date: str,
-    tag: Optional[str],
-    fundamentals_cfg: Mapping,
-) -> Path:
-    prefix = f"{market}_{provider}"
-    if tag:
-        prefix = f"{prefix}_{tag}"
-    cache_payload = {
-        "endpoint": fundamentals_cfg.get("endpoint"),
-        "fields": fundamentals_cfg.get("fields"),
-        "params": fundamentals_cfg.get("params") or {},
-        "column_map": fundamentals_cfg.get("column_map") or {},
-    }
-    cache_digest = hashlib.md5(
-        json.dumps(cache_payload, sort_keys=True, default=str).encode("utf-8")
-    ).hexdigest()[:12]
-    return (
-        cache_dir / f"{prefix}_fundamentals_{symbol}_{start_date}_{end_date}_{cache_digest}.parquet"
-    )
-
-
 def _fetch_daily_rqdata(
     market: str,
     symbol: str,
@@ -260,40 +248,6 @@ def _fetch_daily_rqdata(
     return _prepare_rqdata_daily_frame(df, symbol)
 
 
-def _basic_cache_file(
-    cache_dir: Path,
-    market: str,
-    provider: str,
-    symbols: Optional[Iterable[str]],
-    tag: Optional[str] = None,
-) -> Path:
-    prefix = f"{market}_{provider}"
-    if tag:
-        prefix = f"{prefix}_{tag}"
-    if symbols:
-        normalized = "|".join(sorted(str(sym) for sym in symbols))
-        digest = hashlib.md5(normalized.encode("utf-8")).hexdigest()[:12]
-        return cache_dir / f"{prefix}_basic_{digest}.parquet"
-    return cache_dir / f"{prefix}_basic.parquet"
-
-
-def _sanitize_cache_tag(tag: Optional[str]) -> Optional[str]:
-    if not tag:
-        return None
-    text = str(tag).strip()
-    if not text:
-        return None
-    cleaned = "".join(ch for ch in text if ch.isalnum() or ch in {"-", "_"})
-    return cleaned or None
-
-
-def _cache_tag(data_cfg: Optional[Mapping]) -> Optional[str]:
-    if not isinstance(data_cfg, Mapping):
-        return None
-    tag = data_cfg.get("cache_tag") or data_cfg.get("cache_version")
-    return _sanitize_cache_tag(tag)
-
-
 def _normalize_trade_date_series(series: pd.Series) -> pd.Series:
     if series.empty:
         return series.astype(str)
@@ -308,8 +262,7 @@ def _ensure_trade_date_str(df: pd.DataFrame) -> pd.DataFrame:
         return df
     df = df.copy()
     df["trade_date"] = _normalize_trade_date_series(df["trade_date"])
-    df = df[df["trade_date"].notna()].copy()
-    return df
+    return df[df["trade_date"].notna()].copy()
 
 
 def _is_small_leading_calendar_gap(
@@ -328,15 +281,9 @@ def _is_small_leading_calendar_gap(
     return 0 < gap_days <= int(max_gap_days)
 
 
-def _drop_legacy_symbol_aliases(df: pd.DataFrame | None) -> pd.DataFrame | None:
-    if df is None:
-        return None
-    return drop_legacy_symbol_columns(df)
-
-
 def _load_basic_rqdata(
     market: str,
-    symbols: Optional[Iterable[str]],
+    symbols: Iterable[str] | None,
     client,
     data_cfg: Mapping,
 ) -> pd.DataFrame:
@@ -381,7 +328,7 @@ def _load_basic_rqdata(
             df_basic["list_date"] = pd.to_datetime(
                 df_basic["list_date"], errors="coerce"
             ).dt.strftime("%Y%m%d")
-        return _drop_legacy_symbol_aliases(
+        return drop_legacy_symbol_aliases(
             ensure_symbol_columns(
                 df_basic,
                 context="RQData basic data",
@@ -404,7 +351,7 @@ def _load_basic_rqdata(
         context="RQData all instruments",
         priority=PROVIDER_SYMBOL_PRIORITY,
     )
-    df_basic = _drop_legacy_symbol_aliases(df_basic)
+    df_basic = drop_legacy_symbol_aliases(df_basic)
     df_basic = df_basic[["symbol", "name", "list_date"]].copy()
     df_basic["symbol"] = df_basic["symbol"].map(
         lambda value: normalize_symbol_for_market(value, market=market)
@@ -487,7 +434,7 @@ def _standardize_fundamentals_frame(
         priority=PROVIDER_SYMBOL_PRIORITY,
     )
     df = _force_symbol_value(df, symbol)
-    df = _drop_legacy_symbol_aliases(df)
+    df = drop_legacy_symbol_aliases(df)
     missing = [col for col in FUNDAMENTAL_REQUIRED_COLUMNS if col not in df.columns]
     if missing:
         raise ValueError(f"Fundamentals data missing required columns: {missing}")
@@ -514,7 +461,7 @@ def _standardize_daily_frame(
     missing = [col for col in REQUIRED_DAILY_COLUMNS if col not in df.columns]
     if missing:
         raise ValueError(f"Daily data missing required columns: {missing}")
-    return _drop_legacy_symbol_aliases(df)
+    return drop_legacy_symbol_aliases(df)
 
 
 def _resolve_local_path(path_text: object, *, label: str) -> Path | None:
@@ -631,8 +578,7 @@ def _normalize_reference_date_frame(
     if date_col not in work.columns:
         return pd.DataFrame(columns=[date_col])
     work[date_col] = pd.to_datetime(work[date_col], errors="coerce")
-    work = work[work[date_col].notna()].copy()
-    return work
+    return work[work[date_col].notna()].copy()
 
 
 def _load_local_ex_factors_frame(symbol: str, data_cfg: Mapping | None) -> pd.DataFrame | None:
@@ -807,7 +753,7 @@ def _load_daily_from_local_asset(
 
 def _load_basic_from_local_asset(
     market: str,
-    symbols: Optional[Iterable[str]],
+    symbols: Iterable[str] | None,
     data_cfg: Mapping,
 ) -> pd.DataFrame | None:
     instruments_file = _resolve_local_instruments_file(data_cfg)
@@ -835,12 +781,13 @@ def _load_basic_from_local_asset(
         context="Local RQData instruments file",
         priority=PROVIDER_SYMBOL_PRIORITY,
     )
-    work = _drop_legacy_symbol_aliases(work)
+    work = drop_legacy_symbol_aliases(work)
     required = ["symbol", "name", "list_date"]
     missing = [column for column in required if column not in work.columns]
     if missing:
         raise SystemExit(
-            f"Local RQData instruments file is missing required columns {missing}: {instruments_file}"
+            "Local RQData instruments file is missing required columns "
+            f"{missing}: {instruments_file}"
         )
     work = work[["symbol", "name", "list_date"]].copy()
     work["symbol"] = work["symbol"].map(
@@ -866,7 +813,8 @@ def _fetch_daily_from_provider(
         return local_frame
     if provider != "rqdata":
         raise ValueError(
-            f"Unsupported data provider '{provider}'. This project currently supports only provider='rqdata'."
+            f"Unsupported data provider '{provider}'. "
+            "This project currently supports only provider='rqdata'."
         )
     df = _fetch_daily_rqdata(market, symbol, start_date, end_date, client, data_cfg)
     if df is None or df.empty:
@@ -881,14 +829,14 @@ def fetch_daily(
     end_date: str,
     cache_dir: Path,
     client,
-    data_cfg: Optional[Mapping] = None,
+    data_cfg: Mapping | None = None,
 ) -> pd.DataFrame:
     market = _require_supported_market(market)
     data_cfg = data_cfg or {}
     provider = resolve_provider(data_cfg)
     start_date = str(start_date).strip()
     end_date = str(end_date).strip()
-    tag = _cache_tag(data_cfg)
+    tag = cache_tag(data_cfg)
     prefix = f"{market}_{provider}"
     if tag:
         prefix = f"{prefix}_{tag}"
@@ -900,7 +848,7 @@ def fetch_daily(
         if cache_file.exists():
             cached = pd.read_parquet(cache_file)
             if cached is None or cached.empty:
-                return _drop_legacy_symbol_aliases(cached)
+                return drop_legacy_symbol_aliases(cached)
             cached = ensure_symbol_columns(
                 cached,
                 context="Cached daily data",
@@ -915,8 +863,8 @@ def fetch_daily(
             )
             if cache_changed:
                 cached = cached.copy(deep=True)
-                cached.to_parquet(cache_file)
-            return _drop_legacy_symbol_aliases(cached)
+                write_parquet_cache(cached, cache_file)
+            return drop_legacy_symbol_aliases(cached)
         df = _fetch_daily_from_provider(
             provider, market, symbol, start_date, end_date, client, data_cfg
         )
@@ -930,7 +878,7 @@ def fetch_daily(
         )
         # Ensure buffers are writable before parquet serialization.
         df = df.copy(deep=True)
-        df.to_parquet(cache_file)
+        write_parquet_cache(df, cache_file)
         return df
 
     cache_file = cache_dir / f"{prefix}_daily_{symbol}.parquet"
@@ -1027,29 +975,29 @@ def fetch_daily(
         merged.sort_values(["symbol", "trade_date"], inplace=True)
         # Ensure buffers are writable before parquet serialization.
         merged = merged.copy(deep=True)
-        merged.to_parquet(cache_file)
+        write_parquet_cache(merged, cache_file)
 
     mask = (merged["trade_date"] >= start_date) & (merged["trade_date"] <= end_date)
-    return _drop_legacy_symbol_aliases(merged.loc[mask].copy())
+    return drop_legacy_symbol_aliases(merged.loc[mask].copy())
 
 
 def load_basic(
     market: str,
     cache_dir: Path,
     client,
-    data_cfg: Optional[Mapping] = None,
-    symbols: Optional[Iterable[str]] = None,
+    data_cfg: Mapping | None = None,
+    symbols: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     market = _require_supported_market(market)
     data_cfg = data_cfg or {}
     provider = resolve_provider(data_cfg)
-    tag = _cache_tag(data_cfg)
-    cache_file = _basic_cache_file(cache_dir, market, provider, symbols, tag=tag)
+    tag = cache_tag(data_cfg)
+    cache_file = basic_cache_file(cache_dir, market, provider, symbols, tag=tag)
     if cache_file.exists():
         cached = pd.read_parquet(cache_file)
         if cached is None or cached.empty:
             return cached
-        return _drop_legacy_symbol_aliases(
+        return drop_legacy_symbol_aliases(
             ensure_symbol_columns(
                 cached,
                 context="Cached basic data",
@@ -1059,13 +1007,14 @@ def load_basic(
 
     if provider != "rqdata":
         raise ValueError(
-            f"Unsupported data provider '{provider}'. This project currently supports only provider='rqdata'."
+            f"Unsupported data provider '{provider}'. "
+            "This project currently supports only provider='rqdata'."
         )
     df_basic = _load_basic_rqdata(market, symbols, client, data_cfg)
 
     if df_basic is None or df_basic.empty:
         return df_basic
-    df_basic = _drop_legacy_symbol_aliases(
+    df_basic = drop_legacy_symbol_aliases(
         ensure_symbol_columns(
             df_basic,
             context="Basic data",
@@ -1079,7 +1028,7 @@ def load_basic(
 
     # Ensure buffers are writable before parquet serialization.
     df_basic = df_basic.copy(deep=True)
-    df_basic.to_parquet(cache_file)
+    write_parquet_cache(df_basic, cache_file)
     return df_basic
 
 
@@ -1090,8 +1039,8 @@ def fetch_fundamentals(
     end_date: str,
     cache_dir: Path,
     client,
-    data_cfg: Optional[Mapping] = None,
-    fundamentals_cfg: Optional[Mapping] = None,
+    data_cfg: Mapping | None = None,
+    fundamentals_cfg: Mapping | None = None,
 ) -> pd.DataFrame:
     market = _require_supported_market(market)
     data_cfg = data_cfg or {}
@@ -1101,12 +1050,12 @@ def fetch_fundamentals(
         if fundamentals_cfg.get("provider")
         else resolve_provider(data_cfg)
     )
-    tag = _sanitize_cache_tag(
+    tag = sanitize_cache_tag(
         fundamentals_cfg.get("cache_tag")
         or fundamentals_cfg.get("cache_version")
-        or _cache_tag(data_cfg)
+        or cache_tag(data_cfg)
     )
-    cache_file = _fundamentals_cache_file(
+    cache_file = fundamentals_cache_file(
         cache_dir,
         market,
         provider,
@@ -1126,11 +1075,12 @@ def fetch_fundamentals(
             priority=PROVIDER_SYMBOL_PRIORITY,
         )
         cached = _force_symbol_value(cached, symbol)
-        return _drop_legacy_symbol_aliases(cached)
+        return drop_legacy_symbol_aliases(cached)
 
     if provider != "rqdata":
         raise ValueError(
-            "Fundamentals provider not supported. Use fundamentals.source=file or provider='rqdata'."
+            "Fundamentals provider not supported. "
+            "Use fundamentals.source=file or provider='rqdata'."
         )
     if market != "hk":
         raise ValueError("RQData fundamentals provider currently supports only market='hk'.")
@@ -1169,5 +1119,5 @@ def fetch_fundamentals(
     df = _prepare_rqdata_fundamentals_frame(df, symbol)
     df = _standardize_fundamentals_frame(df, column_map, symbol)
     df = df.copy(deep=True)
-    df.to_parquet(cache_file)
+    write_parquet_cache(df, cache_file)
     return df

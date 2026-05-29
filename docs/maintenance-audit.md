@@ -33,18 +33,18 @@
 
 ## 质量覆盖
 
-本轮已将 `rebalance.py`、`pit_feature_stats.py`、`rqdata_runtime.py` 移出 Ruff 排除，并将 `rebalance.py` 移出 Pyright 排除。`rqdata_runtime.py` 仍保留 Pyright 排除，因为它依赖可选 `rqdatac` 包；`pit_feature_stats.py` 仍保留 Pyright 排除，因为 pandas `groupby().groups` 的类型推断噪声较高。
+本轮已将 `rebalance.py`、`pit_feature_stats.py`、`rqdata_runtime.py`、`data_providers.py`、`data_warehouse.py` 移出 Ruff 排除，并将 `rebalance.py` 移出 Pyright 排除。`data_providers.py` 拆出了 `provider_cache.py`，`data_warehouse.py` 拆出了 `warehouse_query.py`；两者仍暂留 Pyright 排除，因为 pandas-heavy 数据转换和可选 provider SDK 的类型噪声仍较高。`rqdata_runtime.py` 仍保留 Pyright 排除，因为它依赖可选 `rqdatac` 包；`pit_feature_stats.py` 仍保留 Pyright 排除，因为 pandas `groupby().groups` 的类型推断噪声较高。
 
 当前 baseline：
 
 | 工具 | 覆盖文件 | 覆盖行数 | 排除文件 | 排除行数 | 覆盖比例 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Ruff | 58 / 116 | 13,935 / 47,120 | 58 | 33,185 | 29.6% |
-| Pyright | 32 / 116 | 7,603 / 47,120 | 84 | 39,517 | 16.1% |
+| Ruff | 62 / 118 | 16,347 / 47,241 | 56 | 30,894 | 34.6% |
+| Pyright | 34 / 118 | 7,785 / 47,241 | 84 | 39,456 | 16.5% |
 
 仍需优先收紧：
 
-- Ruff：`data_providers.py`、`data_warehouse.py`、`release_tools`、`hk_assets`。
+- Ruff：`release_tools`、`hk_assets`。
 - Pyright：`data_providers.py`、`data_warehouse.py`、`pit_feature_stats.py`、`rqdata_runtime.py`、`release_tools`、`hk_assets`、大部分 `hk_depth` 模块。
 - Pyright 收紧时优先处理纯路径、配置、parser、state、renderer 和 report 逻辑，再处理 provider SDK 与 pandas-heavy 数据转换逻辑。
 
@@ -54,8 +54,8 @@
 
 | 指标 | 当前值 |
 | --- | ---: |
-| Python files | 132 |
-| Python lines | 51,185 |
+| Python files | 135 |
+| Python lines | 51,372 |
 | Functions over 100 lines | 69 |
 | Functions over 250 lines | 17 |
 | Functions with 10+ args | 48 |
@@ -76,7 +76,8 @@
 | `src/market_data_platform/hk_assets/coverage.py` | 1,454 | 拆分 PIT health section、selection logic、rendering |
 | `src/market_data_platform/hk_assets/intraday_health.py` | 1,367 | 拆分 daily reconciliation 与 quality checks |
 | `src/market_data_platform/hk_assets/build.py` | 1,215 | 拆分 PIT build、daily build、metadata helpers |
-| `src/market_data_platform/data_providers.py` | 1,173 | 拆分 provider contracts、cache IO、symbol alias cleanup |
+| `src/market_data_platform/hk_workflows.py` | 1,143 | 拆分 migration/archive helpers 与 HK workflow adapters |
+| `src/market_data_platform/data_providers.py` | 1,123 | 已拆出 cache IO；继续拆 provider SDK adapters 与 pandas transforms |
 
 最大函数：
 
@@ -91,7 +92,9 @@
 | `_build_pit_health_section` | 306 | 拆分 rule collection 与 rendering payload |
 | `inspect_hk_pit_coverage` | 305 | 拆分 input resolve、metric calculation、output |
 
-本轮已从 `cli.py` 提取 TuShare parser 构建逻辑到 `src/market_data_platform/tushare_cli.py`，`cli.py` 从 1,019 行降到 935 行。该重构只移动参数定义，不改变运行行为。
+本轮已从 `cli.py` 提取 TuShare parser 构建逻辑到 `src/market_data_platform/tushare_cli.py`，并将 migration one-off `import-cross-artifacts` 的执行入口转到 `scripts/internal/import_cross_artifacts.py`。`cli.py` 保留 deprecated wrapper 和 warning，避免现有自动化直接断裂。
+
+本轮也从 `data_warehouse.py` 提取 DuckDB standardized query registration 到 `src/market_data_platform/warehouse_query.py`，从 `data_providers.py` 提取 cache path、cache tag、legacy symbol cleanup 和 parquet cache write helper 到 `src/market_data_platform/provider_cache.py`。这两个大文件已恢复 Ruff 覆盖，但仍需要后续针对 pandas-heavy 类型噪声逐步恢复 Pyright 覆盖。
 
 ## 兼容层决策
 
@@ -104,7 +107,7 @@
 | `market_data_platform.rqdata_cn` / `tushare_cn` | 2 | 2 | 1 | 1 | 保留；推荐 provider namespace |
 | `marketdata migration status` | 1 | 1 | 2 | 2 | 保留为迁移状态查看；长期候选为 docs-only |
 | `marketdata migration sync-hk-links` | 1 | 1 | 1 | 2 | 保留；等下游只读 current contract 后删除 |
-| `marketdata migration import-cross-artifacts` | 1 | 1 | 3 | 2 | 保留但不新增能力；后续可迁到内部脚本或 archive 文档 |
+| `marketdata migration import-cross-artifacts` | 1 | 2 | 3 | 2 | Deprecated wrapper；执行逻辑已归档到 `scripts/internal/import_cross_artifacts.py`，后续确认无下游依赖后移除 CLI wrapper |
 | `rqdata-hk-depth` / `rqdata-tick` | 1 | 1 | 4 | 4 | 保留；新任务使用 `marketdata rqdata hk-depth -- ...` |
 | `rqdata-hk-assets` | 1 | 1 | 4 | 3 | 保留；已补 console script smoke test |
 | HK release presets | 0 | 0 | 1 | 2 | 保留；定期归档历史 snapshot preset |
@@ -127,8 +130,8 @@
 
 ## 下一轮优先级
 
-1. 将 `src/market_data_platform/data_warehouse.py` 拆出 DuckDB query registration 和 materialize write plan，再恢复 Ruff 覆盖。
-1. 将 `src/market_data_platform/data_providers.py` 拆出 cache IO 与 symbol alias cleanup，再恢复 Ruff 覆盖。
 1. 从 `hk_assets/asset_health.py` 提取 report builder，并为 JSON payload 增加 focused tests。
-1. 将 `marketdata migration import-cross-artifacts` 迁到内部脚本或 archive 文档前，先完成下游确认。
+1. 继续拆 `src/market_data_platform/data_providers.py` 的 provider SDK adapters 和 pandas transforms，逐步恢复 Pyright 覆盖。
+1. 继续拆 `src/market_data_platform/data_warehouse.py` 的 catalog/materialize pandas-heavy 逻辑，逐步恢复 Pyright 覆盖。
+1. 确认下游没有 `marketdata migration import-cross-artifacts` 依赖后，移除 CLI wrapper，仅保留 `scripts/internal/import_cross_artifacts.py` 和 archived docs。
 1. 定期审查 `configs/presets/release/*.yml`，将不再用于复现的 snapshot preset 移入归档记录。

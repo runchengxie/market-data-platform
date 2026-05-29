@@ -248,7 +248,7 @@ def test_import_cross_platform_artifacts_apply_copies_and_writes_manifest(tmp_pa
 def test_cli_import_cross_artifacts_defaults_to_dry_run(monkeypatch, capsys):
     observed = {}
 
-    def fake_import_cross_platform_artifacts(*args, **kwargs):
+    def fake_run_import_cross_artifacts(*args, **kwargs):
         observed["args"] = args
         observed["kwargs"] = kwargs
         return {
@@ -266,10 +266,12 @@ def test_cli_import_cross_artifacts_defaults_to_dry_run(monkeypatch, capsys):
             ],
         }
 
+    from scripts.internal import import_cross_artifacts as archived_import
+
     monkeypatch.setattr(
-        cli,
-        "import_cross_platform_artifacts",
-        fake_import_cross_platform_artifacts,
+        archived_import,
+        "run_import_cross_artifacts",
+        fake_run_import_cross_artifacts,
     )
 
     with pytest.warns(FutureWarning, match="import-cross-artifacts"):
@@ -282,6 +284,40 @@ def test_cli_import_cross_artifacts_defaults_to_dry_run(monkeypatch, capsys):
     assert observed["kwargs"]["dry_run"] is True
     assert observed["kwargs"]["overwrite"] is False
     assert "dry_run_copy: metadata/dataset_registry.csv" in capsys.readouterr().out
+
+
+def test_internal_import_cross_artifacts_delegates_to_platform_import(monkeypatch):
+    from scripts.internal import import_cross_artifacts as archived_import
+
+    observed = {}
+
+    def fake_import_cross_platform_artifacts(*args, **kwargs):
+        observed["args"] = args
+        observed["kwargs"] = kwargs
+        return {"summary": {"dry_run_copy": 0}, "items": []}
+
+    monkeypatch.setattr(
+        archived_import,
+        "import_cross_platform_artifacts",
+        fake_import_cross_platform_artifacts,
+    )
+
+    payload = archived_import.run_import_cross_artifacts(
+        "/tmp/platform",
+        cross_artifacts_root="/tmp/cross",
+        workspace_root="/tmp/workspace",
+        dry_run=False,
+        overwrite=True,
+    )
+
+    assert payload == {"summary": {"dry_run_copy": 0}, "items": []}
+    assert observed["args"] == ("/tmp/platform",)
+    assert observed["kwargs"] == {
+        "cross_artifacts_root": "/tmp/cross",
+        "workspace_root": "/tmp/workspace",
+        "dry_run": False,
+        "overwrite": True,
+    }
 
 
 def test_run_hk_depth_refresh_dry_run_builds_full_pipeline(tmp_path):

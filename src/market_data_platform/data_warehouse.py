@@ -6,17 +6,15 @@ import re
 import shutil
 import sqlite3
 import subprocess
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from importlib import import_module
 from pathlib import Path
-from typing import Iterable, Mapping
 
 import pandas as pd
 import yaml
 
 from .artifacts import (
-    default_path_text,
     resolve_artifacts_root,
     resolve_metadata_db_path,
     resolve_repo_path,
@@ -24,7 +22,7 @@ from .artifacts import (
     standardized_dir_for,
 )
 from .symbols import resolve_symbol_series
-
+from .warehouse_query import execute_standardized_query
 
 PRESET_DEFAULTS: dict[str, dict[str, str]] = {
     "rqdata-daily": {
@@ -205,7 +203,11 @@ def _infer_source_manifest(*, asset_dir: Path | None, file_path: Path | None) ->
     return None
 
 
-def _collect_input_files(*, asset_dir: Path | None, file_path: Path | None) -> tuple[list[Path], str]:
+def _collect_input_files(
+    *,
+    asset_dir: Path | None,
+    file_path: Path | None,
+) -> tuple[list[Path], str]:
     if asset_dir is not None:
         data_dir = asset_dir / "data"
         if not data_dir.exists():
@@ -249,13 +251,12 @@ def _resample_frequency(frame: pd.DataFrame, frequency: str) -> pd.DataFrame:
         work["_bucket"] = work["trade_date"].dt.to_period("Q")
     else:  # pragma: no cover - guarded by _coerce_frequency
         raise SystemExit(f"Unsupported frequency: {frequency}")
-    work = (
+    return (
         work.groupby(["symbol", "_bucket"], sort=False, group_keys=False)
         .tail(1)
         .drop(columns=["_bucket"])
         .reset_index(drop=True)
     )
-    return work
 
 
 def _normalize_frame(
@@ -327,7 +328,12 @@ def _normalize_frame(
     }
 
 
-def _write_partitioned_parquet(frame: pd.DataFrame, *, output_data_dir: Path, part_index: int) -> int:
+def _write_partitioned_parquet(
+    frame: pd.DataFrame,
+    *,
+    output_data_dir: Path,
+    part_index: int,
+) -> int:
     if frame.empty:
         empty_dir = output_data_dir / "trade_year=empty"
         empty_dir.mkdir(parents=True, exist_ok=True)
@@ -444,7 +450,9 @@ def _artifact_path(path: Path, payload: Mapping) -> str:
     return str(path.parent.resolve())
 
 
-def _extract_counts(payload: Mapping) -> tuple[int | None, int | None, int | None, int | None, int | None]:
+def _extract_counts(
+    payload: Mapping,
+) -> tuple[int | None, int | None, int | None, int | None, int | None]:
     totals = payload.get("totals") if isinstance(payload.get("totals"), Mapping) else {}
     row_count = _maybe_int(totals.get("output_rows"))
     if row_count is None:
@@ -481,7 +489,10 @@ def _extract_range(payload: Mapping) -> tuple[str | None, str | None, str | None
     )
 
 
-def _catalog_artifact_from_manifest(path: Path, payload: Mapping) -> tuple[CatalogArtifact, list[str], list[CatalogLineage]]:
+def _catalog_artifact_from_manifest(
+    path: Path,
+    payload: Mapping,
+) -> tuple[CatalogArtifact, list[str], list[CatalogLineage]]:
     dataset = str(payload.get("dataset") or "").strip() or None
     layer = _infer_layer(path, payload)
     created_at = payload.get("created_at")
@@ -514,8 +525,14 @@ def _catalog_artifact_from_manifest(path: Path, payload: Mapping) -> tuple[Catal
         file_count=file_count,
         total_bytes=total_bytes,
         frequency=frequency,
-        source_asset_dir=str(payload.get("source_asset_dir") or source.get("asset_dir") or "").strip() or None,
-        source_manifest=str(payload.get("source_manifest") or source.get("source_manifest") or "").strip() or None,
+        source_asset_dir=(
+            str(payload.get("source_asset_dir") or source.get("asset_dir") or "").strip()
+            or None
+        ),
+        source_manifest=(
+            str(payload.get("source_manifest") or source.get("source_manifest") or "").strip()
+            or None
+        ),
         view_name=str(payload.get("view_name") or "").strip() or None,
         metadata_json=json.dumps(metadata, ensure_ascii=False, sort_keys=True, default=str),
     )
@@ -679,7 +696,9 @@ def refresh_catalog(args) -> int:
     lineages: list[CatalogLineage] = []
     for manifest_path in manifests:
         payload = _load_yaml(manifest_path)
-        artifact, columns, artifact_lineages = _catalog_artifact_from_manifest(manifest_path, payload)
+        artifact, columns, artifact_lineages = _catalog_artifact_from_manifest(
+            manifest_path, payload
+        )
         artifacts.append(artifact)
         artifact_columns.extend(
             (artifact.artifact_id, idx, str(column))
@@ -816,7 +835,10 @@ def materialize_standardized(args) -> int:
             continue
 
         if not column_dtypes:
-            column_dtypes = {column: str(dtype) for column, dtype in normalized.drop(columns=["trade_year"]).dtypes.items()}
+            column_dtypes = {
+                column: str(dtype)
+                for column, dtype in normalized.drop(columns=["trade_year"]).dtypes.items()
+            }
 
         total_output_rows += int(len(normalized))
         symbols_seen.update(normalized["symbol"].astype(str).unique().tolist())
@@ -891,45 +913,6 @@ def materialize_standardized(args) -> int:
     return 0
 
 
-def _import_duckdb():
-    try:
-        return import_module("duckdb")
-    except ImportError as exc:  # pragma: no cover - exercised via CLI/SystemExit
-        raise SystemExit(
-            "duckdb is not installed. Install with: uv sync --extra duckdb"
-        ) from exc
-
-
-def _standardized_manifests(root: Path) -> list[Path]:
-    manifests: list[Path] = []
-    for path in sorted(root.glob("**/manifest.yml")):
-        if not path.is_file():
-            continue
-        payload = _load_yaml(path)
-        if payload.get("layer") == "standardized":
-            manifests.append(path)
-    return manifests
-
-
-def _refresh_duckdb_views(conn, *, standardized_root: Path) -> int:
-    manifests = _standardized_manifests(standardized_root)
-    conn.execute("CREATE SCHEMA IF NOT EXISTS standardized")
-    registered = 0
-    for manifest_path in manifests:
-        payload = _load_yaml(manifest_path)
-        output_glob = payload.get("output_glob")
-        if not output_glob:
-            continue
-        view_name = _sanitize_identifier(str(payload.get("view_name") or payload.get("name") or manifest_path.parent.name))
-        query = (
-            f'CREATE OR REPLACE VIEW standardized."{view_name}" AS '
-            f"SELECT * FROM read_parquet({_duckdb_sql_literal(str(output_glob))}, union_by_name = true)"
-        )
-        conn.execute(query)
-        registered += 1
-    return registered
-
-
 def _read_sql(args) -> str:
     sql_text = str(getattr(args, "sql", "") or "").strip()
     sql_file = getattr(args, "sql_file", None)
@@ -943,7 +926,6 @@ def _read_sql(args) -> str:
 
 
 def query_standardized(args) -> int:
-    duckdb = _import_duckdb()
     artifacts_root = resolve_artifacts_root(getattr(args, "artifacts_root", None))
     db_path = resolve_warehouse_db_path(
         getattr(args, "db_path", None),
@@ -953,15 +935,13 @@ def query_standardized(args) -> int:
         getattr(args, "standardized_root", None)
         or standardized_dir_for(artifacts_root)
     )
-    db_path.parent.mkdir(parents=True, exist_ok=True)
 
     sql_text = _read_sql(args)
-    conn = duckdb.connect(str(db_path))
-    try:
-        registered = _refresh_duckdb_views(conn, standardized_root=standardized_root)
-        result = conn.execute(sql_text).df()
-    finally:
-        conn.close()
+    result, registered = execute_standardized_query(
+        sql_text,
+        db_path=db_path,
+        standardized_root=standardized_root,
+    )
 
     output_format = str(getattr(args, "format", "text") or "text").strip().lower()
     out_path = resolve_repo_path(args.out) if getattr(args, "out", None) else None
@@ -1010,7 +990,10 @@ def add_catalog_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--db-path",
         default=None,
-        help="Optional SQLite catalog output path. Default: <artifacts_root>/metadata/catalog.sqlite.",
+        help=(
+            "Optional SQLite catalog output path. "
+            "Default: <artifacts_root>/metadata/catalog.sqlite."
+        ),
     )
     parser.add_argument(
         "--summary-out",
@@ -1043,7 +1026,10 @@ def add_materialize_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--dataset-name",
-        help="Logical dataset group under artifacts/standardized/<market>/. Default comes from --preset.",
+        help=(
+            "Logical dataset group under artifacts/standardized/<market>/. "
+            "Default comes from --preset."
+        ),
     )
     source_group = parser.add_mutually_exclusive_group(required=True)
     source_group.add_argument(
@@ -1104,7 +1090,10 @@ def add_query_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--standardized-root",
         default=None,
-        help="Standardized layer root scanned for manifest-backed views. Default: <artifacts_root>/standardized.",
+        help=(
+            "Standardized layer root scanned for manifest-backed views. "
+            "Default: <artifacts_root>/standardized."
+        ),
     )
     parser.add_argument(
         "--format",
