@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import pandas as pd
 import pytest
 
@@ -43,6 +45,19 @@ def test_hk_depth_parser_exposes_migrated_commands() -> None:
         "emit-asset",
         "package-assets",
     }.issubset(subparser_action.choices)
+
+
+def test_legacy_hk_depth_console_entry_warns(monkeypatch) -> None:
+    from market_data_platform.hk_depth import cli
+
+    monkeypatch.setattr(sys, "argv", ["rqdata-tick", "--help"])
+    monkeypatch.setattr(cli, "main", lambda: 0)
+
+    with pytest.warns(FutureWarning, match="marketdata rqdata hk-depth"):
+        with pytest.raises(SystemExit) as exc:
+            cli.main_entry()
+
+    assert exc.value.code == 0
 
 
 def test_hk_depth_offline_pipeline_uses_platform_package(tmp_path) -> None:

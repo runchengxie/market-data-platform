@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import importlib
+import sys
+
+import pytest
+
 from market_data_platform.cli import main
 from market_data_platform.contract import build_current_contract, write_current_contract
 from market_data_platform.paths import (
@@ -298,11 +303,14 @@ def test_combined_dataset_registry_includes_hk_and_cn_contracts(tmp_path):
 
 
 def test_hk_data_platform_imports_remain_compatible(tmp_path):
-    from hk_data_platform.paths import current_contract_path as legacy_current_contract_path
+    sys.modules.pop("hk_data_platform.paths", None)
+    sys.modules.pop("hk_data_platform", None)
+    with pytest.warns(DeprecationWarning, match="hk_data_platform"):
+        legacy_paths = importlib.import_module("hk_data_platform.paths")
 
     root = tmp_path / "market-data"
 
-    assert legacy_current_contract_path(root, market="cn") == current_contract_path(
+    assert legacy_paths.current_contract_path(root, market="cn") == current_contract_path(
         root,
         market="cn",
     )

@@ -55,16 +55,18 @@ uv run --extra dev python scripts/dev/maintainability_metrics.py --check-baselin
 - Ruff / Pyright checked source lines 下降。
 - Ruff / Pyright excluded source lines 上升。
 - Ruff / Pyright source exclude 列表新增但 baseline 未更新。
+- 已纳入治理的边界模块重新进入 Ruff / Pyright exclude。
 - 大文件、长函数、超长参数列表或 public facade export 数量超过已接受 baseline。
 
 ## 分阶段准入计划
 
 当前优先级：
 
-1. Ruff：先移出低风险单文件 exclude。第一批已将 `src/market_data_platform/symbols.py`
-   纳入 Ruff 覆盖。
-1. Ruff：继续处理 `data_provider_contracts.py`、`rqdata_cli_common.py`、
-   `config_utils.py` 这类边界模块，把目录级排除收窄成具体文件问题。
+1. Ruff / Pyright：`config_utils.py`、`data_provider_contracts.py`、
+   `rqdata_cli_common.py`、`symbols.py` 已纳入覆盖，并由
+   `quality_debt.PROTECTED_INCLUDED_PATHS` 防止重新排除。
+1. Ruff：继续处理 `data_providers.py`、`data_warehouse.py`、
+   `rqdata_runtime.py` 这类边界模块，把目录级排除收窄成具体文件问题。
 1. Pyright：优先处理 contracts、paths、manifest、registry、current assets 等边界模块。
 1. Pyright：provider contract 使用 `Protocol`、`TypedDict` 或 dataclass 稳定接口后再扩大覆盖。
 1. HK assets / HK depth / release workflows：先通过 maintainability metrics 锁定长函数，

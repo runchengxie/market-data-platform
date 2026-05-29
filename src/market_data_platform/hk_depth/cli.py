@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from market_data_platform.deprecations import warn_if_legacy_console_script
 from market_data_platform.hk_depth.aggregate import write_daily_aggregate
 from market_data_platform.hk_depth.assets import emit_daily_asset, emit_raw_asset
 from market_data_platform.hk_depth.compact import (
@@ -524,6 +525,10 @@ def main(argv: list[str] | None = None, provider: TickDataProvider | None = None
 
 
 def main_entry() -> None:
+    warn_if_legacy_console_script(
+        ("rqdata-hk-depth", "rqdata-tick"),
+        "marketdata rqdata hk-depth -- <args>",
+    )
     raise SystemExit(main())
 
 

@@ -66,9 +66,9 @@ def resolve_symbol_series(
     if not present_columns:
         raise SystemExit(f"{context} is missing symbol/stock_ticker/ts_code/order_book_id.")
 
-    merged = _clean_symbol_series(df[present_columns[0]])
+    merged = _clean_symbol_series(df.loc[:, present_columns[0]].squeeze())
     for column in present_columns[1:]:
-        series = _clean_symbol_series(df[column])
+        series = _clean_symbol_series(df.loc[:, column].squeeze())
         merged = merged.where(merged != "", series)
     return merged
 

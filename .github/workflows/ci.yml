@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+      - name: Pytest
+        run: uv run --extra dev python -m pytest
+      - name: Ruff
+        run: uv run --extra dev python -m ruff check .
+      - name: Pyright
+        run: uv run --extra dev python -m pyright
+      - name: Quality coverage baseline
+        run: uv run --extra dev python scripts/dev/quality_debt.py --skip-ruff --check-baseline
+      - name: Maintainability baseline
+        run: uv run --extra dev python scripts/dev/maintainability_metrics.py --check-baseline
+      - name: Compatibility governance
+        run: uv run --extra dev python scripts/dev/compatibility_governance.py --check
+      - name: Architecture governance
+        run: uv run --extra dev python scripts/dev/architecture_governance.py --check

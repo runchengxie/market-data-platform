@@ -16,6 +16,12 @@ BASELINE_PATH = REPO_ROOT / "scripts" / "dev" / "quality_baseline.json"
 DEFAULT_RUFF_SELECT = "E,F,I,UP,B,C4,RET,RUF100"
 COMPLEXITY_RUFF_SELECT = "C90,PLR0911,PLR0912,PLR0913,PLR0915"
 BASELINE_VERSION = 1
+PROTECTED_INCLUDED_PATHS = (
+    "src/market_data_platform/config_utils.py",
+    "src/market_data_platform/data_provider_contracts.py",
+    "src/market_data_platform/rqdata_cli_common.py",
+    "src/market_data_platform/symbols.py",
+)
 
 
 def _python_files(src_root: Path = SRC_ROOT) -> list[Path]:
@@ -34,7 +40,11 @@ def _load_pyproject(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
 
 def _is_excluded(path: Path, patterns: set[str], *, repo_root: Path = REPO_ROOT) -> bool:
     rel = path.relative_to(repo_root).as_posix()
-    return any(rel == pattern or rel.startswith(pattern.rstrip("/") + "/") for pattern in patterns)
+    return any(_pattern_excludes_path(rel, pattern) for pattern in patterns)
+
+
+def _pattern_excludes_path(path: str, pattern: str) -> bool:
+    return path == pattern or path.startswith(pattern.rstrip("/") + "/")
 
 
 def _coverage_for(
@@ -128,6 +138,17 @@ def _coverage_issues(
 
         current_excludes = set(current.get("excluded_patterns") or [])
         expected_excludes = set(expected.get("excluded_patterns") or [])
+        protected_excludes = sorted(
+            path
+            for path in PROTECTED_INCLUDED_PATHS
+            if any(_pattern_excludes_path(path, pattern) for pattern in current_excludes)
+        )
+        if protected_excludes:
+            issues.append(
+                f"{tool_name}: protected paths must stay checked: "
+                f"{', '.join(protected_excludes)}"
+            )
+
         added_excludes = sorted(current_excludes - expected_excludes)
         if added_excludes:
             issues.append(f"{tool_name}: new excludes not in baseline: {', '.join(added_excludes)}")

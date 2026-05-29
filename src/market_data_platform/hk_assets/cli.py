@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from market_data_platform.deprecations import warn_if_legacy_console_script
 from market_data_platform.hk_assets.command_registry import (
     RQDataAssetCommandSpec,
     rqdata_asset_command_specs,
@@ -92,6 +93,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def main_entry() -> None:
+    warn_if_legacy_console_script(
+        ("rqdata-hk-assets",),
+        "marketdata rqdata hk-assets -- <args>",
+    )
     raise SystemExit(main())
 
 

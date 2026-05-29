@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
+
+import pytest
 
 from market_data_platform import cli, hk_workflows, transitions
 from market_data_platform.providers import rqdata_cn, tushare_cn
@@ -56,10 +59,29 @@ def test_cli_forwards_native_hk_assets_args_after_separator(monkeypatch):
     assert observed == [["mirror-hk-daily"]]
 
 
+def test_hkdata_cli_warns_and_forwards(monkeypatch):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        from hk_data_platform import cli as legacy_cli
+
+    observed: list[list[str] | None] = []
+    monkeypatch.setattr(
+        legacy_cli,
+        "_marketdata_main",
+        lambda argv=None: observed.append(argv) or 0,
+    )
+
+    with pytest.warns(FutureWarning, match="hkdata"):
+        assert legacy_cli.main(["paths"]) == 0
+
+    assert observed == [["paths"]]
+
+
 def test_migration_status_reports_hk_assets_native(monkeypatch, capsys):
     monkeypatch.setattr(cli, "transition_status", lambda: [])
 
-    assert cli.main(["migration", "status", "--json"]) == 0
+    with pytest.warns(FutureWarning, match="migration status"):
+        assert cli.main(["migration", "status", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
 
     assert {item["name"] for item in payload["native"]} >= {
@@ -157,7 +179,8 @@ def test_cli_sync_hk_links_prints_file_rows(monkeypatch, capsys):
         ],
     )
 
-    assert cli.main(["migration", "sync-hk-links", "--artifacts-root", "/tmp/platform"]) == 0
+    with pytest.warns(FutureWarning, match="sync-hk-links"):
+        assert cli.main(["migration", "sync-hk-links", "--artifacts-root", "/tmp/platform"]) == 0
 
     assert (
         capsys.readouterr().out
@@ -249,10 +272,11 @@ def test_cli_import_cross_artifacts_defaults_to_dry_run(monkeypatch, capsys):
         fake_import_cross_platform_artifacts,
     )
 
-    assert (
-        cli.main(["migration", "import-cross-artifacts", "--artifacts-root", "/tmp/platform"])
-        == 0
-    )
+    with pytest.warns(FutureWarning, match="import-cross-artifacts"):
+        assert (
+            cli.main(["migration", "import-cross-artifacts", "--artifacts-root", "/tmp/platform"])
+            == 0
+        )
 
     assert observed["args"] == ("/tmp/platform",)
     assert observed["kwargs"]["dry_run"] is True

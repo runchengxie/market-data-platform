@@ -65,15 +65,12 @@ extend-exclude = [
   "artifacts",
   "data",
   "reports",
-  "src/market_data_platform/config_utils.py",
-  "src/market_data_platform/data_provider_contracts.py",
   "src/market_data_platform/data_providers.py",
   "src/market_data_platform/data_warehouse.py",
   "src/market_data_platform/hk_assets",
   "src/market_data_platform/pit_feature_stats.py",
   "src/market_data_platform/rebalance.py",
   "src/market_data_platform/release_tools",
-  "src/market_data_platform/rqdata_cli_common.py",
   "src/market_data_platform/rqdata_runtime.py",
 ]
 
@@ -93,16 +90,12 @@ exclude = [
   # Migrated from cross-sectional-trees; keep runtime migration separate from
   # the pandas-heavy typing cleanup.
   "src/market_data_platform/hk_assets",
-  "src/market_data_platform/config_utils.py",
-  "src/market_data_platform/data_provider_contracts.py",
   "src/market_data_platform/data_providers.py",
   "src/market_data_platform/data_warehouse.py",
   "src/market_data_platform/pit_feature_stats.py",
   "src/market_data_platform/rebalance.py",
   "src/market_data_platform/release_tools",
-  "src/market_data_platform/rqdata_cli_common.py",
   "src/market_data_platform/rqdata_runtime.py",
-  "src/market_data_platform/symbols.py",
 ]
 venvPath = "."
 venv = ".venv"

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from market_data_platform.contract import build_current_contract, write_current_contract
+from market_data_platform.deprecations import warn_deprecated_command
 from market_data_platform.hk_workflows import (
     HK_INSPECT_ASSET_CHOICES,
     HK_REFRESH_ASSET_CHOICES,
@@ -892,6 +893,10 @@ def _handle_tushare(args: argparse.Namespace) -> int:
 
 
 def _handle_migration_status(args: argparse.Namespace) -> int:
+    warn_deprecated_command(
+        "marketdata migration status",
+        "docs/migration-plan.md and native marketdata rqdata commands",
+    )
     payload = {
         "native": [
             {
@@ -939,6 +944,10 @@ def _handle_migration_status(args: argparse.Namespace) -> int:
 
 
 def _handle_migration_sync_hk_links(args: argparse.Namespace) -> int:
+    warn_deprecated_command(
+        "marketdata migration sync-hk-links",
+        "current contract consumers with explicit artifacts roots",
+    )
     payload = sync_hk_transition_links(
         args.artifacts_root,
         dry_run=args.dry_run,
@@ -954,6 +963,10 @@ def _handle_migration_sync_hk_links(args: argparse.Namespace) -> int:
 
 
 def _handle_migration_import_cross_artifacts(args: argparse.Namespace) -> int:
+    warn_deprecated_command(
+        "marketdata migration import-cross-artifacts",
+        "archived migration documentation or an internal one-off script",
+    )
     payload = import_cross_platform_artifacts(
         args.artifacts_root,
         cross_artifacts_root=args.cross_artifacts_root,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Optional
 
 SUPPORTED_MARKETS = {"hk", "cn"}
 
@@ -32,15 +32,15 @@ MARKET_SPECS = {
 }
 
 
-def normalize_market(market: Optional[str], *, default: Optional[str] = "hk") -> Optional[str]:
+def normalize_market(market: str | None, *, default: str | None = "hk") -> str | None:
     fallback = None if default is None else str(default).strip().lower() or None
     value = str(market).strip().lower() if market is not None else None
     return value or fallback
 
 
 def resolve_provider(
-    data_cfg: Optional[Mapping], *, default: Optional[str] = "rqdata"
-) -> Optional[str]:
+    data_cfg: Mapping | None, *, default: str | None = "rqdata"
+) -> str | None:
     if not isinstance(data_cfg, Mapping):
         return default
     raw = data_cfg.get("provider", default)
@@ -53,18 +53,19 @@ def resolve_provider(
 
 
 def fundamentals_provider_supported(provider: str, market: str) -> bool:
-    provider = resolve_provider({"provider": provider}, default="rqdata")
-    market = normalize_market(market)
-    return provider == "rqdata" and market == "hk"
+    normalized_provider = resolve_provider({"provider": provider}, default="rqdata")
+    normalized_market = normalize_market(market)
+    return normalized_provider == "rqdata" and normalized_market == "hk"
 
 
 def require_supported_market(market: str) -> str:
-    market = normalize_market(market)
-    if market not in SUPPORTED_MARKETS:
+    normalized_market = normalize_market(market)
+    if normalized_market not in SUPPORTED_MARKETS:
+        supported = ", ".join(sorted(SUPPORTED_MARKETS))
         raise ValueError(
-            f"Unsupported market '{market}'. Supported markets: {', '.join(sorted(SUPPORTED_MARKETS))}."
+            f"Unsupported market '{normalized_market}'. Supported markets: {supported}."
         )
-    return market
+    return normalized_market
 
 
 def hk_to_rqdata_symbol(symbol: str) -> str:

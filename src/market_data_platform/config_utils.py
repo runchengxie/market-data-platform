@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any
 
 import yaml
 
 from .repo_paths import find_repo_root
-
 
 EXTENDS_KEY = "extends"
 LEGACY_UNIVERSE_KEY = "universe"
@@ -101,7 +101,7 @@ def _iter_search_candidates(
 def _resolve_extends(
     data: dict,
     *,
-    package: str,
+    package: str | None,
     search_paths: list[str] | None = None,
     current_path: Path | None = None,
     _stack: set[str] | None = None,
@@ -160,14 +160,13 @@ def _resolve_extends(
     for base in base_configs:
         merged = _deep_merge(merged, base)
 
-    merged = _deep_merge(merged, data)
-    return merged
+    return _deep_merge(merged, data)
 
 
 def _load_config_by_ref(
     ref: str,
     *,
-    package: str,
+    package: str | None,
     search_paths: list[str] | None = None,
     current_path: Path | None = None,
 ) -> LoadedConfigRef | None:
@@ -236,7 +235,7 @@ def _package_has_file(package: str, filename: str) -> bool:
         return False
 
 
-def _resolve_alias(ref: str, aliases: Optional[Mapping[str, str]]) -> Optional[str]:
+def _resolve_alias(ref: str, aliases: Mapping[str, str] | None) -> str | None:
     if not aliases:
         return None
     key = ref.strip()
@@ -257,7 +256,7 @@ def resolve_config(
     *,
     package: str | None,
     default_name: str,
-    aliases: Optional[Mapping[str, str]] = None,
+    aliases: Mapping[str, str] | None = None,
     search_paths: list[str] | None = None,
 ) -> ResolvedConfig:
     """Resolve pipeline config with extends support."""

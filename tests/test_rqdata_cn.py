@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from market_data_platform.rqdata_cn import (
+import importlib
+import sys
+
+import pytest
+
+from market_data_platform.providers.rqdata_cn import (
     normalize_cn_symbol,
     read_symbols_file,
     to_rqdata_cn_symbol,
@@ -24,3 +29,10 @@ def test_read_symbols_file_supports_text_and_csv(tmp_path):
 
     assert read_symbols_file(text_path) == ["600000.SH", "000001.SZ"]
     assert read_symbols_file(csv_path) == ["600000.SH", "000001.SZ"]
+
+
+def test_legacy_rqdata_module_warns_on_import():
+    sys.modules.pop("market_data_platform.rqdata_cn", None)
+    with pytest.warns(DeprecationWarning, match="market_data_platform.providers.rqdata_cn"):
+        legacy = importlib.import_module("market_data_platform.rqdata_cn")
+    assert legacy.normalize_cn_symbol("600000.XSHG") == "600000.SH"

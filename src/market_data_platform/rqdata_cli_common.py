@@ -4,11 +4,8 @@ import logging
 
 from dotenv import load_dotenv
 
+from . import rqdata_runtime
 from .config_utils import resolve_pipeline_config
-from .rqdata_runtime import (
-    init_rqdatac as _init_rqdatac_runtime,
-    patch_rqdatac_adjust_price_readonly as _patch_rqdatac_adjust_price_readonly,
-)
 
 
 def format_bytes(value: float) -> str:
@@ -18,6 +15,7 @@ def format_bytes(value: float) -> str:
         if size < 1024 or unit == units[-1]:
             return f"{size:.2f} {unit}"
         size /= 1024
+    return f"{size:.2f} {units[-1]}"
 
 
 def render_pct_bar(pct: float, width: int = 20) -> str:
@@ -185,13 +183,16 @@ def init_rqdatac(args) -> object:
     load_dotenv()
     cfg = load_config(args.config) if getattr(args, "config", None) else {}
     data_cfg = cfg.get("data") if isinstance(cfg, dict) else None
-    return _init_rqdatac_runtime(
+    return rqdata_runtime.init_rqdatac(
         data_cfg=data_cfg,
         username=getattr(args, "username", None),
         password=getattr(args, "password", None),
         logger=logging.getLogger("market_data_platform.hk_assets.cli"),
         load_env=False,
         error_cls=SystemExit,
-        import_error_message="rqdatac is not installed. Install with: pip install 'market-data-platform[rqdata]'",
-        patch_fn=_patch_rqdatac_adjust_price_readonly,
+        import_error_message=(
+            "rqdatac is not installed. Install with: "
+            "pip install 'market-data-platform[rqdata]'"
+        ),
+        patch_fn=rqdata_runtime.patch_rqdatac_adjust_price_readonly,
     )

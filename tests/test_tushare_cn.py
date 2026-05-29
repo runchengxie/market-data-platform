@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib
 import json
+import sys
 
 import pytest
 import yaml
@@ -144,3 +146,10 @@ def test_stk_limit_command_is_exposed_with_limit_status_alias():
 
     assert primary.tushare_command == "mirror-cn-stk-limit"
     assert alias.tushare_command == "mirror-cn-limit-status"
+
+
+def test_legacy_tushare_module_warns_on_import():
+    sys.modules.pop("market_data_platform.tushare_cn", None)
+    with pytest.warns(DeprecationWarning, match="market_data_platform.providers.tushare_cn"):
+        legacy = importlib.import_module("market_data_platform.tushare_cn")
+    assert legacy.DEFAULT_TOKEN_ENV_KEYS == ("TUSHARE_TOKEN", "TUSHARE_TOKEN_2")
