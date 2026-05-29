@@ -33,6 +33,47 @@ def test_hk_assets_public_facade_exports_mirror_helpers():
     assert callable(mirror_hk_pit_financials)
 
 
+def test_data_provider_private_cache_aliases_remain_compatible(tmp_path):
+    from market_data_platform import data_providers
+
+    data_cfg = {"cache_tag": "demo tag!"}
+    fundamentals_cfg = {"endpoint": "get_factor", "fields": ["pb"], "column_map": {}}
+
+    assert data_providers._cache_tag(data_cfg) == data_providers.cache_tag(data_cfg)
+    assert data_providers._basic_cache_file(
+        tmp_path,
+        "hk",
+        "rqdata",
+        ["00001.HK"],
+        tag="demo",
+    ) == data_providers.basic_cache_file(
+        tmp_path,
+        "hk",
+        "rqdata",
+        ["00001.HK"],
+        tag="demo",
+    )
+    assert data_providers._fundamentals_cache_file(
+        tmp_path,
+        "hk",
+        "rqdata",
+        "00001.HK",
+        "20200101",
+        "20200131",
+        "demo",
+        fundamentals_cfg,
+    ) == data_providers.fundamentals_cache_file(
+        tmp_path,
+        "hk",
+        "rqdata",
+        "00001.HK",
+        "20200101",
+        "20200131",
+        "demo",
+        fundamentals_cfg,
+    )
+
+
 def test_cli_forwards_native_hk_depth_args_after_separator(monkeypatch):
     observed: list[list[str]] = []
 
@@ -136,14 +177,12 @@ def test_sync_hk_transition_links_repoints_broken_symlinks(tmp_path):
     )
 
     assert {row["status"] for row in rows} == {"updated"}
-    assert (
-        cstree_artifacts.joinpath("assets/rqdata").resolve(strict=False)
-        == artifacts_root.joinpath("assets/rqdata")
-    )
-    assert (
-        cstree_artifacts.joinpath("metadata/current_assets").resolve(strict=False)
-        == artifacts_root.joinpath("metadata/current_assets")
-    )
+    assert cstree_artifacts.joinpath("assets/rqdata").resolve(
+        strict=False
+    ) == artifacts_root.joinpath("assets/rqdata")
+    assert cstree_artifacts.joinpath("metadata/current_assets").resolve(
+        strict=False
+    ) == artifacts_root.joinpath("metadata/current_assets")
 
 
 def test_sync_hk_transition_links_copies_dataset_registry_when_present(tmp_path):

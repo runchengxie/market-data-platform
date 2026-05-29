@@ -100,6 +100,15 @@ def test_maintainability_baseline_flags_regression(tmp_path: Path) -> None:
     assert any("max_argument_count increased" in issue for issue in issues)
 
 
+def test_maintainability_baseline_accepts_legacy_metrics_payload(tmp_path: Path) -> None:
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "demo.py").write_text("def demo(a, b):\n    return a + b\n", encoding="utf-8")
+    metrics = maintainability_metrics.collect_metrics(tmp_path, ("src",), limit=1)
+
+    assert maintainability_metrics.compare_to_baseline(metrics, metrics.to_payload()) == []
+
+
 def test_compatibility_inventory_is_complete() -> None:
     report = compatibility_governance.build_report()
 

@@ -27,12 +27,63 @@ DEFAULT_STOCK_BASIC_FIELDS = (
     "delist_date",
     "is_hs",
 )
+DEFAULT_DAILY_FIELDS = (
+    "ts_code",
+    "trade_date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "pre_close",
+    "change",
+    "pct_chg",
+    "vol",
+    "amount",
+)
+DEFAULT_ADJ_FACTOR_FIELDS = (
+    "ts_code",
+    "trade_date",
+    "adj_factor",
+)
+DEFAULT_DAILY_BASIC_FIELDS = (
+    "ts_code",
+    "trade_date",
+    "close",
+    "turnover_rate",
+    "turnover_rate_f",
+    "volume_ratio",
+    "pe",
+    "pe_ttm",
+    "pb",
+    "ps",
+    "ps_ttm",
+    "dv_ratio",
+    "dv_ttm",
+    "total_share",
+    "float_share",
+    "free_share",
+    "total_mv",
+    "circ_mv",
+)
+DEFAULT_LIMIT_STATUS_FIELDS = (
+    "ts_code",
+    "trade_date",
+    "pre_close",
+    "up_limit",
+    "down_limit",
+)
 DEFAULT_LIST_STATUSES = ("L", "D", "P", "G")
 TRADE_DATE_APIS = {
     "daily": "daily",
     "adj_factor": "adj_factor",
     "daily_basic": "daily_basic",
     "limit_status": "stk_limit",
+}
+DEFAULT_TRADE_DATE_FIELDS = {
+    "daily": DEFAULT_DAILY_FIELDS,
+    "adj_factor": DEFAULT_ADJ_FACTOR_FIELDS,
+    "daily_basic": DEFAULT_DAILY_BASIC_FIELDS,
+    "limit_status": DEFAULT_LIMIT_STATUS_FIELDS,
 }
 
 
@@ -155,9 +206,13 @@ def verify_tushare_tokens(
             continue
         try:
             client = ts.pro_api(token=token)
-            response = client.user(token=token)
+            response = client.trade_cal(
+                exchange="",
+                start_date="20200101",
+                end_date="20200110",
+            )
             if response is None:
-                raise RuntimeError("TuShare returned no user response")
+                raise RuntimeError("TuShare returned no trade_cal response")
         except Exception as exc:  # Provider errors are reported without exposing the token.
             results.append(
                 {
@@ -287,7 +342,9 @@ def mirror_cn_trade_date_dataset(
     output_dir = Path(out_dir).expanduser().resolve()
     data_dir = output_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
-    requested_fields = tuple(fields or ())
+    requested_fields = tuple(
+        DEFAULT_TRADE_DATE_FIELDS.get(dataset, ()) if fields is None else fields
+    )
     fields_text = _fields_text(requested_fields, required=("ts_code", "trade_date"))
     trade_dates = _open_trade_dates(pro, start_date=start, end_date=end)
 

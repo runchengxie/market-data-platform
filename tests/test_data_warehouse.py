@@ -415,3 +415,21 @@ def test_artifacts_root_prefers_data_platform_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CSTREE_ARTIFACTS_ROOT", str(legacy_root))
 
     assert artifacts.resolve_artifacts_root() == platform_root.resolve()
+
+
+def test_hk_data_platform_root_does_not_override_artifacts_root(monkeypatch, tmp_path):
+    hk_root = tmp_path / "hk"
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HK_DATA_PLATFORM_ROOT", str(hk_root))
+
+    assert artifacts.resolve_artifacts_root() == (tmp_path / "artifacts").resolve()
+    assert artifacts.resolve_hk_data_platform_root() == hk_root.resolve()
+    assert (
+        artifacts.resolve_data_input_path("artifacts/assets/universe/demo.csv")
+        == (hk_root / "assets" / "universe" / "demo.csv").resolve()
+    )
+    assert (
+        artifacts.resolve_data_input_path("artifacts/runs/demo")
+        == (tmp_path / "artifacts" / "runs" / "demo").resolve()
+    )

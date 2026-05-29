@@ -19,6 +19,15 @@ DEFAULT_ROOTS = ("src", "scripts", "tests")
 DEFAULT_LIMIT = 15
 PUBLIC_EXPORTS_PATH = Path("src/market_data_platform/hk_assets/_public_exports.py")
 BASELINE_VERSION = 1
+BASELINE_METRIC_KEYS = (
+    "functions_over_100",
+    "functions_over_250",
+    "functions_over_500",
+    "functions_with_10_plus_args",
+    "max_file_lines",
+    "max_function_lines",
+    "max_argument_count",
+)
 
 
 @dataclass(frozen=True)
@@ -238,23 +247,23 @@ def _metric_value(payload: Mapping[str, Any], key: str) -> int:
     return int(value) if isinstance(value, int | float) else 0
 
 
-def compare_to_baseline(metrics: Metrics, baseline: Mapping[str, Any]) -> list[str]:
+def _baseline_metrics_payload(baseline: Mapping[str, Any]) -> Mapping[str, Any] | None:
     baseline_metrics = baseline.get("metrics")
-    if not isinstance(baseline_metrics, Mapping):
+    if isinstance(baseline_metrics, Mapping):
+        return baseline_metrics
+    if any(key in baseline for key in BASELINE_METRIC_KEYS):
+        return baseline
+    return None
+
+
+def compare_to_baseline(metrics: Metrics, baseline: Mapping[str, Any]) -> list[str]:
+    baseline_metrics = _baseline_metrics_payload(baseline)
+    if baseline_metrics is None:
         return ["maintainability: baseline is missing metrics"]
 
     current = metrics.to_payload()
-    checked_keys = (
-        "functions_over_100",
-        "functions_over_250",
-        "functions_over_500",
-        "functions_with_10_plus_args",
-        "max_file_lines",
-        "max_function_lines",
-        "max_argument_count",
-    )
     issues: list[str] = []
-    for key in checked_keys:
+    for key in BASELINE_METRIC_KEYS:
         current_value = _metric_value(current, key)
         baseline_value = _metric_value(baseline_metrics, key)
         if current_value > baseline_value:
@@ -318,8 +327,7 @@ def format_markdown(metrics: Metrics) -> str:
     ]
     for item in metrics.largest_functions:
         lines.append(
-            f"| {item.lines} | {item.arguments} | `{item.name}` | "
-            f"`{item.path}:{item.start_line}` |"
+            f"| {item.lines} | {item.arguments} | `{item.name}` | `{item.path}:{item.start_line}` |"
         )
     return "\n".join(lines)
 

@@ -45,8 +45,16 @@ def normalize_symbol_for_market(value: object, *, market: str | None) -> str:
     return upper
 
 
+def _column_series(df: pd.DataFrame, column: str) -> pd.Series:
+    values = df.loc[:, column]
+    if isinstance(values, pd.DataFrame):
+        values = values.iloc[:, 0]
+    return values
+
+
 def _clean_symbol_series(values: pd.Series) -> pd.Series:
-    return values.where(values.notna(), "").astype(str).str.strip()
+    series = values if isinstance(values, pd.Series) else pd.Series([values])
+    return series.where(series.notna(), "").astype(str).str.strip()
 
 
 def normalize_symbol_standard_name(name: object) -> str:
@@ -66,9 +74,9 @@ def resolve_symbol_series(
     if not present_columns:
         raise SystemExit(f"{context} is missing symbol/stock_ticker/ts_code/order_book_id.")
 
-    merged = _clean_symbol_series(df.loc[:, present_columns[0]].squeeze())
+    merged = _clean_symbol_series(_column_series(df, present_columns[0]))
     for column in present_columns[1:]:
-        series = _clean_symbol_series(df.loc[:, column].squeeze())
+        series = _clean_symbol_series(_column_series(df, column))
         merged = merged.where(merged != "", series)
     return merged
 

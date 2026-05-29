@@ -47,7 +47,8 @@ PRESET_DEFAULTS: dict[str, dict[str, str]] = {
     },
 }
 ARTIFACTS_ROOT_HELP = (
-    "Default: DATA_PLATFORM_ROOT, HK_DATA_PLATFORM_ROOT, CSTREE_ARTIFACTS_ROOT, or artifacts/."
+    "Default: DATA_PLATFORM_ROOT, CSTREE_ARTIFACTS_ROOT, or artifacts/. "
+    "HK_DATA_PLATFORM_ROOT only re-roots shared HK data input paths."
 )
 
 FREQUENCY_ALIASES = {
@@ -526,8 +527,7 @@ def _catalog_artifact_from_manifest(
         total_bytes=total_bytes,
         frequency=frequency,
         source_asset_dir=(
-            str(payload.get("source_asset_dir") or source.get("asset_dir") or "").strip()
-            or None
+            str(payload.get("source_asset_dir") or source.get("asset_dir") or "").strip() or None
         ),
         source_manifest=(
             str(payload.get("source_manifest") or source.get("source_manifest") or "").strip()
@@ -685,8 +685,7 @@ def refresh_catalog(args) -> int:
         artifacts_root=artifacts_root,
     )
     summary_out = resolve_repo_path(
-        getattr(args, "summary_out", None)
-        or (db_path.parent / "catalog_summary.csv")
+        getattr(args, "summary_out", None) or (db_path.parent / "catalog_summary.csv")
     )
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -701,8 +700,7 @@ def refresh_catalog(args) -> int:
         )
         artifacts.append(artifact)
         artifact_columns.extend(
-            (artifact.artifact_id, idx, str(column))
-            for idx, column in enumerate(columns, start=1)
+            (artifact.artifact_id, idx, str(column)) for idx, column in enumerate(columns, start=1)
         )
         lineages.extend(artifact_lineages)
 
@@ -759,10 +757,7 @@ def refresh_catalog(args) -> int:
         _write_catalog_summary_csv(conn, summary_out)
         artifact_count = conn.execute("SELECT COUNT(*) FROM artifacts").fetchone()[0]
 
-    print(
-        f"Catalog refreshed: {artifact_count} artifacts -> {db_path} "
-        f"(summary: {summary_out})"
-    )
+    print(f"Catalog refreshed: {artifact_count} artifacts -> {db_path} (summary: {summary_out})")
     return 0
 
 
@@ -794,8 +789,7 @@ def materialize_standardized(args) -> int:
 
     artifacts_root = resolve_artifacts_root(getattr(args, "artifacts_root", None))
     out_root = resolve_repo_path(
-        getattr(args, "out_root", None)
-        or standardized_dir_for(artifacts_root)
+        getattr(args, "out_root", None) or standardized_dir_for(artifacts_root)
     )
     market = str(getattr(args, "market", "hk") or "hk").strip().lower()
     output_dir = out_root / market / dataset / name
@@ -932,8 +926,7 @@ def query_standardized(args) -> int:
         artifacts_root=artifacts_root,
     )
     standardized_root = resolve_repo_path(
-        getattr(args, "standardized_root", None)
-        or standardized_dir_for(artifacts_root)
+        getattr(args, "standardized_root", None) or standardized_dir_for(artifacts_root)
     )
 
     sql_text = _read_sql(args)

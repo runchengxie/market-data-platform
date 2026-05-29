@@ -60,7 +60,6 @@ def resolve_artifacts_root(path_text: str | Path | None = None) -> Path:
     configured = (
         _normalize_path_text(path_text)
         or _resolve_env_path(ENV_DATA_PLATFORM_ROOT)
-        or _resolve_env_path(ENV_HK_DATA_PLATFORM_ROOT)
         or _resolve_env_path(ENV_ARTIFACTS_ROOT)
     )
     return resolve_repo_path(configured or ARTIFACTS_ROOT)
@@ -108,10 +107,8 @@ def resolve_configured_artifacts_root(
 ) -> Path:
     if override is not None:
         return resolve_artifacts_root(override)
-    configured_env = (
-        _resolve_env_path(ENV_DATA_PLATFORM_ROOT)
-        or _resolve_env_path(ENV_HK_DATA_PLATFORM_ROOT)
-        or _resolve_env_path(ENV_ARTIFACTS_ROOT)
+    configured_env = _resolve_env_path(ENV_DATA_PLATFORM_ROOT) or _resolve_env_path(
+        ENV_ARTIFACTS_ROOT
     )
     if configured_env is not None:
         return resolve_artifacts_root(configured_env)

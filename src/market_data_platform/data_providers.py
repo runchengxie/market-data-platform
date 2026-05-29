@@ -49,6 +49,10 @@ from .symbols import (
 
 logger = logging.getLogger("market_data_platform.data_providers")
 
+_basic_cache_file = basic_cache_file
+_cache_tag = cache_tag
+_fundamentals_cache_file = fundamentals_cache_file
+
 FUNDAMENTAL_COLUMN_CANDIDATES = {
     "trade_date": ["trade_date", "date", "trade_dt", "trade_day"],
     "symbol": ["symbol", "ts_code", "ticker", "code", "sec_code", "tscode", "order_book_id"],

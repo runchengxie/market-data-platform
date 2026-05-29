@@ -9,6 +9,7 @@ from market_data_platform.hk_assets.intraday_download import (
     download_hk_intraday_cache,
     merge_batch_parts,
 )
+from market_data_platform.symbols import canonicalize_symbol_columns
 
 
 def test_hk_intraday_download_parser_defaults_to_pre_adjusted_bars():
@@ -58,6 +59,16 @@ def test_read_symbol_file_normalizes_legacy_hk_symbol_columns(tmp_path):
     out = _read_symbol_file(path)
 
     assert out == ["00700.HK", "00005.HK"]
+
+
+def test_canonicalize_symbol_columns_handles_single_row_frames():
+    out = canonicalize_symbol_columns(
+        pd.DataFrame({"symbol": ["AAA"], "score": [1.0]}),
+        context="test frame",
+    )
+
+    assert out["symbol"].tolist() == ["AAA"]
+    assert out["score"].tolist() == [1.0]
 
 
 def test_read_symbol_file_rejects_missing_symbol_aliases_with_symbol_first_message(tmp_path):
