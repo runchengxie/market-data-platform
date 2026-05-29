@@ -107,6 +107,41 @@ class DownloadRunContext:
     calendar_source: str
 
 
+@dataclass(frozen=True)
+class BatchPreflightResult:
+    plans_to_download: list[BatchPlan]
+    audit_records: list[AuditRecord]
+
+
+@dataclass(frozen=True)
+class BatchExecutionContext:
+    provider: TickDataProvider
+    run: DownloadRunContext
+    metadata: dict[str, Any]
+    detail_recorder: DownloadMetadataRecorder
+    audit_writer: IncrementalAuditWriter
+    metadata_file: Path
+    run_id: str
+
+
+@dataclass(frozen=True)
+class BatchAttemptContext:
+    plan: BatchPlan
+    batch_info: dict[str, Any]
+    chunk_id: str
+    quota_before: dict[str, Any]
+    started_at: str
+    started_clock: float
+
+
+@dataclass(frozen=True)
+class BatchProviderResult:
+    raw: pd.DataFrame
+    quota_after: dict[str, Any]
+    quota_delta: int | None
+    attempts: int
+
+
 def utc_now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -1131,37 +1166,352 @@ def _batch_part_valid(
     return set(symbols).issubset(valid_symbols), rows
 
 
+def _batch_plan_info(plan: BatchPlan, **extra: Any) -> dict[str, Any]:
+    return {
+        "trade_date": plan.trade_date,
+        "batch_number": plan.batch_number,
+        "symbols": list(plan.symbols),
+        "part_path": str(plan.part_path),
+        **extra,
+    }
+
+
+def _batch_unit(plan: BatchPlan, symbol: str) -> UnitPlan:
+    return UnitPlan(plan.trade_date, symbol, plan.part_path)
+
+
+def _batch_resume_valid_row(
+    rows: Sequence[dict[str, Any]],
+    plan: BatchPlan,
+    symbol: str,
+) -> dict[str, Any]:
+    return next(
+        (
+            item
+            for item in rows
+            if item.get("status") == VALID_STATUS
+            and item.get("trading_date") == plan.trade_date
+            and item.get("order_book_id") == symbol
+        ),
+        {},
+    )
+
+
+def _batch_resume_invalid_row(
+    rows: Sequence[dict[str, Any]],
+    plan: BatchPlan,
+    symbol: str,
+) -> dict[str, Any]:
+    return next(
+        (
+            item
+            for item in rows
+            if item.get("order_book_id") in {symbol, None}
+            or item.get("file_path") == str(plan.part_path)
+        ),
+        {"status": STATUS_MISSING, "reason": "missing local part"},
+    )
+
+
+def _record_batch_planned_units(
+    detail_recorder: DownloadMetadataRecorder,
+    plans: Sequence[BatchPlan],
+) -> None:
+    for plan in plans:
+        for symbol in plan.symbols:
+            detail_recorder.record(
+                "planned_units",
+                _unit_info(_batch_unit(plan, symbol)),
+            )
+
+
+def _prepare_batch_preflight(
+    run: DownloadRunContext,
+    plans: Sequence[BatchPlan],
+    detail_recorder: DownloadMetadataRecorder,
+    run_id: str,
+) -> BatchPreflightResult:
+    config = run.config
+    plans_to_download: list[BatchPlan] = []
+    audit_records: list[AuditRecord] = []
+    for plan in plans:
+        batch_info = _batch_plan_info(plan)
+        if config.resume:
+            is_valid, rows = _batch_part_valid(
+                plan.part_path,
+                trade_date=plan.trade_date,
+                symbols=plan.symbols,
+                fields=config.fields,
+            )
+            if is_valid:
+                detail_recorder.record(
+                    "skipped_batches",
+                    {**batch_info, "validation_status": VALID_STATUS},
+                )
+                for symbol in plan.symbols:
+                    row = _batch_resume_valid_row(rows, plan, symbol)
+                    detail_recorder.record(
+                        "skipped_units",
+                        _unit_info(
+                            _batch_unit(plan, symbol),
+                            validation_status=VALID_STATUS,
+                            existing_file_path=row.get("file_path", str(plan.part_path)),
+                            row_count=row.get("row_count", 0),
+                        ),
+                    )
+                    audit_records.append(
+                        _audit_record(
+                            run_id=run_id,
+                            chunk_id=f"{plan.trade_date}:{plan.batch_number:04d}:resume",
+                            unit=_batch_unit(plan, symbol),
+                            status="skipped_existing",
+                            rows=int(row.get("row_count") or 0),
+                            attempts=0,
+                        )
+                    )
+                continue
+            for symbol in plan.symbols:
+                invalid_row = _batch_resume_invalid_row(rows, plan, symbol)
+                detail_recorder.record(
+                    "invalid_units",
+                    _unit_info(
+                        _batch_unit(plan, symbol),
+                        validation_status=invalid_row.get("status"),
+                        existing_file_path=invalid_row.get("file_path"),
+                        reason=invalid_row.get("reason"),
+                    ),
+                )
+        plans_to_download.append(plan)
+
+    for plan in plans_to_download:
+        detail_recorder.record("planned_batches", _batch_plan_info(plan))
+    return BatchPreflightResult(
+        plans_to_download=plans_to_download,
+        audit_records=audit_records,
+    )
+
+
+def _finish_batch_dry_run(
+    metadata: dict[str, Any],
+    detail_recorder: DownloadMetadataRecorder,
+    preflight: BatchPreflightResult,
+) -> dict[str, Any]:
+    metadata["audit_status_counts"] = summarize_audit(preflight.audit_records)
+    metadata["run_status"] = "dry_run"
+    detail_recorder.close()
+    return metadata
+
+
+def _write_batch_checkpoint(ctx: BatchExecutionContext) -> None:
+    _write_download_checkpoint(
+        provider=ctx.provider,
+        metadata=ctx.metadata,
+        detail_recorder=ctx.detail_recorder,
+        audit_writer=ctx.audit_writer,
+        metadata_file=ctx.metadata_file,
+        run_status="running",
+    )
+
+
+def _record_batch_quota_block(
+    ctx: BatchExecutionContext,
+    plan: BatchPlan,
+    batch_info: dict[str, Any],
+    quota_before: dict[str, Any],
+    guard: dict[str, Any],
+) -> None:
+    batch_info["category"] = "quota_guard"
+    batch_info["error"] = "quota guard blocked provider request"
+    ctx.detail_recorder.record("quota_blocked_batches", batch_info)
+    batch_audit_records: list[AuditRecord] = []
+    chunk_id = f"{plan.trade_date}:{plan.batch_number:04d}"
+    for symbol in plan.symbols:
+        unit = _batch_unit(plan, symbol)
+        ctx.detail_recorder.record(
+            "quota_blocked_units",
+            _unit_info(
+                unit,
+                category="quota_guard",
+                estimated_next_delta_bytes=guard.get("estimated_next_delta_bytes"),
+            ),
+        )
+        batch_audit_records.append(
+            _audit_record(
+                run_id=ctx.run_id,
+                chunk_id=chunk_id,
+                unit=unit,
+                status="quota_blocked",
+                quota_before=quota_before,
+                error_type="quota_guard",
+                error_message="quota guard blocked provider request",
+            )
+        )
+    ctx.audit_writer.append(batch_audit_records)
+    _write_batch_checkpoint(ctx)
+
+
+def _fetch_batch_provider_result(
+    ctx: BatchExecutionContext,
+    plan: BatchPlan,
+    quota_before: dict[str, Any],
+) -> BatchProviderResult:
+    config = ctx.run.config
+    result = _fetch_provider_tick_frame(
+        provider=ctx.provider,
+        symbols=plan.symbols,
+        trade_date=plan.trade_date,
+        fields=config.fields,
+        adjust_type=config.adjust_type,
+        time_slice=config.time_slice,
+        retry_max_attempts=config.retry_max_attempts,
+        retry_backoff_seconds=config.retry_backoff_seconds,
+        retry_max_backoff_seconds=config.retry_max_backoff_seconds,
+    )
+    quota_after = _quota_snapshot(ctx.provider)
+    return BatchProviderResult(
+        raw=result.value,
+        quota_after=quota_after,
+        quota_delta=_quota_delta(quota_before, quota_after),
+        attempts=result.attempts,
+    )
+
+
+def _record_batch_success(
+    ctx: BatchExecutionContext,
+    attempt: BatchAttemptContext,
+    result: BatchProviderResult,
+) -> None:
+    fields = ctx.run.config.fields
+    writer = ctx.run.storage["parquet"]
+    normalized = normalize_tick_frame(result.raw, fields)
+    atomic_write_parquet(normalized, attempt.plan.part_path, **writer)
+    finished_at = utc_now_iso()
+    duration_seconds = round(perf_counter() - attempt.started_clock, 6)
+    attempt.batch_info["rows"] = int(len(normalized))
+    attempt.batch_info["columns"] = list(normalized.columns)
+    attempt.batch_info["attempts"] = result.attempts
+    attempt.batch_info["quota_after"] = result.quota_after
+    attempt.batch_info["quota_delta_bytes"] = result.quota_delta
+    ctx.metadata["rows"] += int(len(normalized))
+    ctx.detail_recorder.record("completed_batches", attempt.batch_info)
+    batch_audit_records: list[AuditRecord] = []
+    for symbol in attempt.plan.symbols:
+        unit = _batch_unit(attempt.plan, symbol)
+        unit_frame = _filter_unit_frame(normalized, unit)
+        unit_rows = int(len(unit_frame))
+        status = "written"
+        if unit_rows == 0:
+            status = "empty_remote"
+            ctx.detail_recorder.record(
+                "empty_units",
+                _unit_info(unit, reason="provider returned no rows"),
+            )
+        ctx.detail_recorder.record(
+            "completed_units",
+            _unit_info(
+                unit,
+                rows=unit_rows,
+                columns=list(unit_frame.columns),
+                attempts=result.attempts,
+                quota_delta_bytes=result.quota_delta,
+            ),
+        )
+        batch_audit_records.append(
+            _audit_record(
+                run_id=ctx.run_id,
+                chunk_id=attempt.chunk_id,
+                unit=unit,
+                status=status,
+                rows=unit_rows,
+                started_at=attempt.started_at,
+                finished_at=finished_at,
+                duration_seconds=duration_seconds,
+                quota_before=attempt.quota_before,
+                quota_after=result.quota_after,
+                quota_delta=result.quota_delta,
+                attempts=result.attempts,
+            )
+        )
+    ctx.audit_writer.append(batch_audit_records)
+    _write_batch_checkpoint(ctx)
+
+
+def _record_batch_failure(
+    ctx: BatchExecutionContext,
+    attempt: BatchAttemptContext,
+    exc: Exception,
+) -> Any:
+    category = getattr(exc, "category", "download_error")
+    quota_after = _quota_snapshot(ctx.provider)
+    quota_delta = _quota_delta(attempt.quota_before, quota_after)
+    failed_info = {
+        **attempt.batch_info,
+        "category": category,
+        "error": str(exc),
+        "quota_after": quota_after,
+        "quota_delta_bytes": quota_delta,
+    }
+    ctx.detail_recorder.record("failed_batches", failed_info)
+    batch_audit_records: list[AuditRecord] = []
+    for symbol in attempt.plan.symbols:
+        unit = _batch_unit(attempt.plan, symbol)
+        if category == "quota":
+            ctx.detail_recorder.record(
+                "quota_blocked_units",
+                _unit_info(unit, category=category, error=str(exc)),
+            )
+        else:
+            ctx.detail_recorder.record(
+                "failed_units",
+                _unit_info(unit, category=category, error=str(exc)),
+            )
+        batch_audit_records.append(
+            _audit_record(
+                run_id=ctx.run_id,
+                chunk_id=attempt.chunk_id,
+                unit=unit,
+                status="quota_blocked" if category == "quota" else "failed",
+                started_at=attempt.started_at,
+                finished_at=utc_now_iso(),
+                duration_seconds=round(perf_counter() - attempt.started_clock, 6),
+                quota_before=attempt.quota_before,
+                quota_after=quota_after,
+                quota_delta=quota_delta,
+                error_type=str(category),
+                error_message=str(exc),
+            )
+        )
+    ctx.audit_writer.append(batch_audit_records)
+    _write_batch_checkpoint(ctx)
+    return category
+
+
 def _download_batch_tick_depth(
     *,
     provider: TickDataProvider | None,
     run: DownloadRunContext,
 ) -> dict[str, Any]:
     config = run.config
-    symbols = config.symbols
-    fields = config.fields
     root = config.output_root
-    batch_size = config.batch_size
     metadata_kind = config.metadata_kind
-    storage = run.storage
-    trade_dates = run.trade_dates
     plans = build_batch_plan(
-        symbols,
+        config.symbols,
         config.start_date,
         config.end_date,
         root,
-        batch_size,
-        trade_dates=trade_dates,
+        config.batch_size,
+        trade_dates=run.trade_dates,
     )
     metadata = _base_metadata(
         kind=metadata_kind,
-        symbols=symbols,
+        symbols=config.symbols,
         start_date=config.start_date,
         end_date=config.end_date,
-        fields=fields,
+        fields=config.fields,
         output_root=root,
-        batch_size=batch_size,
-        storage=storage,
-        trade_dates=trade_dates,
+        batch_size=config.batch_size,
+        storage=run.storage,
+        trade_dates=run.trade_dates,
         calendar_source=run.calendar_source,
         adjust_type=config.adjust_type,
         time_slice=config.time_slice,
@@ -1169,7 +1519,6 @@ def _download_batch_tick_depth(
     if not config.dry_run and provider is None:
         raise DownloadError("A provider is required unless dry_run=True.")
     run_id = str(metadata["run_id"])
-    preflight_audit_records: list[AuditRecord] = []
     audit_file = (
         Path(config.audit_output)
         if config.audit_output
@@ -1187,138 +1536,38 @@ def _download_batch_tick_depth(
         download_detail_path(root, metadata_kind, run_id),
         inline_limit=config.metadata_detail_limit,
     )
-    for plan in plans:
-        for symbol in plan.symbols:
-            detail_recorder.record(
-                "planned_units",
-                {
-                    "trade_date": plan.trade_date,
-                    "order_book_id": symbol,
-                    "part_path": str(plan.part_path),
-                },
-            )
-    metadata["coverage"] = coverage_summary(scan_raw_coverage(root, requested_fields=fields))
+    _record_batch_planned_units(detail_recorder, plans)
+    metadata["coverage"] = coverage_summary(
+        scan_raw_coverage(root, requested_fields=config.fields)
+    )
     metadata["dry_run"] = config.dry_run
 
-    plans_to_download: list[BatchPlan] = []
-    for plan in plans:
-        batch_info = {
-            "trade_date": plan.trade_date,
-            "batch_number": plan.batch_number,
-            "symbols": list(plan.symbols),
-            "part_path": str(plan.part_path),
-        }
-        if config.resume:
-            is_valid, rows = _batch_part_valid(
-                plan.part_path,
-                trade_date=plan.trade_date,
-                symbols=plan.symbols,
-                fields=fields,
-            )
-            if is_valid:
-                detail_recorder.record(
-                    "skipped_batches",
-                    {**batch_info, "validation_status": VALID_STATUS}
-                )
-                for symbol in plan.symbols:
-                    row = next(
-                        (
-                            item
-                            for item in rows
-                            if item.get("status") == VALID_STATUS
-                            and item.get("trading_date") == plan.trade_date
-                            and item.get("order_book_id") == symbol
-                        ),
-                        {},
-                    )
-                    detail_recorder.record(
-                        "skipped_units",
-                        {
-                            "trade_date": plan.trade_date,
-                            "order_book_id": symbol,
-                            "part_path": str(plan.part_path),
-                            "validation_status": VALID_STATUS,
-                            "existing_file_path": row.get("file_path", str(plan.part_path)),
-                            "row_count": row.get("row_count", 0),
-                        }
-                    )
-                    preflight_audit_records.append(
-                        _audit_record(
-                            run_id=run_id,
-                            chunk_id=f"{plan.trade_date}:{plan.batch_number:04d}:resume",
-                            unit=UnitPlan(plan.trade_date, symbol, plan.part_path),
-                            status="skipped_existing",
-                            rows=int(row.get("row_count") or 0),
-                            attempts=0,
-                        )
-                    )
-                continue
-            for symbol in plan.symbols:
-                invalid_row = next(
-                    (
-                        item
-                        for item in rows
-                        if item.get("order_book_id") in {symbol, None}
-                        or item.get("file_path") == str(plan.part_path)
-                    ),
-                    {"status": STATUS_MISSING, "reason": "missing local part"},
-                )
-                detail_recorder.record(
-                    "invalid_units",
-                    {
-                        "trade_date": plan.trade_date,
-                        "order_book_id": symbol,
-                        "part_path": str(plan.part_path),
-                        "validation_status": invalid_row.get("status"),
-                        "existing_file_path": invalid_row.get("file_path"),
-                        "reason": invalid_row.get("reason"),
-                    }
-                )
-        plans_to_download.append(plan)
-
-    for plan in plans_to_download:
-        detail_recorder.record(
-            "planned_batches",
-            {
-                "trade_date": plan.trade_date,
-                "batch_number": plan.batch_number,
-                "symbols": list(plan.symbols),
-                "part_path": str(plan.part_path),
-            },
-        )
-
+    preflight = _prepare_batch_preflight(run, plans, detail_recorder, run_id)
     if config.dry_run:
-        metadata["audit_status_counts"] = summarize_audit(preflight_audit_records)
-        metadata["run_status"] = "dry_run"
-        detail_recorder.close()
-        return metadata
+        return _finish_batch_dry_run(metadata, detail_recorder, preflight)
 
     assert provider is not None
     metadata["quota_before"] = _quota_snapshot(provider)
     metadata_file = metadata_path(root, metadata_kind)
     metadata["metadata_path"] = str(metadata_file)
-    writer = storage["parquet"]
     successful_quota_deltas: list[int] = []
     audit_writer = IncrementalAuditWriter(audit_file)
-    audit_writer.append(preflight_audit_records)
+    audit_writer.append(preflight.audit_records)
+    ctx = BatchExecutionContext(
+        provider=provider,
+        run=run,
+        metadata=metadata,
+        detail_recorder=detail_recorder,
+        audit_writer=audit_writer,
+        metadata_file=metadata_file,
+        run_id=run_id,
+    )
     completed = False
 
     try:
-        _write_download_checkpoint(
-            provider=provider,
-            metadata=metadata,
-            detail_recorder=detail_recorder,
-            audit_writer=audit_writer,
-            metadata_file=metadata_file,
-            run_status="running",
-        )
-        for plan in plans_to_download:
-            batch_info = {
-                "trade_date": plan.trade_date,
-                "batch_number": plan.batch_number,
-                "symbols": list(plan.symbols),
-                "part_path": str(plan.part_path),
-            }
+        _write_batch_checkpoint(ctx)
+        for plan in preflight.plans_to_download:
+            batch_info = _batch_plan_info(plan)
             chunk_id = f"{plan.trade_date}:{plan.batch_number:04d}"
             quota_before = _quota_snapshot(provider)
             guard = _quota_guard_decision(
@@ -1332,179 +1581,24 @@ def _download_batch_tick_depth(
             batch_info["quota_before"] = quota_before
             batch_info["quota_guard"] = guard
             if guard["blocked"]:
-                batch_info["category"] = "quota_guard"
-                batch_info["error"] = "quota guard blocked provider request"
-                detail_recorder.record("quota_blocked_batches", batch_info)
-                batch_audit_records: list[AuditRecord] = []
-                for symbol in plan.symbols:
-                    unit = UnitPlan(plan.trade_date, symbol, plan.part_path)
-                    detail_recorder.record(
-                        "quota_blocked_units",
-                        _unit_info(
-                            unit,
-                            category="quota_guard",
-                            estimated_next_delta_bytes=guard.get("estimated_next_delta_bytes"),
-                        )
-                    )
-                    batch_audit_records.append(
-                        _audit_record(
-                            run_id=run_id,
-                            chunk_id=chunk_id,
-                            unit=unit,
-                            status="quota_blocked",
-                            quota_before=quota_before,
-                            error_type="quota_guard",
-                            error_message="quota guard blocked provider request",
-                        )
-                    )
-                audit_writer.append(batch_audit_records)
-                _write_download_checkpoint(
-                    provider=provider,
-                    metadata=metadata,
-                    detail_recorder=detail_recorder,
-                    audit_writer=audit_writer,
-                    metadata_file=metadata_file,
-                    run_status="running",
-                )
+                _record_batch_quota_block(ctx, plan, batch_info, quota_before, guard)
                 continue
 
-            started_at = utc_now_iso()
-            started_clock = perf_counter()
+            attempt = BatchAttemptContext(
+                plan=plan,
+                batch_info=batch_info,
+                chunk_id=chunk_id,
+                quota_before=quota_before,
+                started_at=utc_now_iso(),
+                started_clock=perf_counter(),
+            )
             try:
-                result = _fetch_provider_tick_frame(
-                    provider=provider,
-                    symbols=plan.symbols,
-                    trade_date=plan.trade_date,
-                    fields=fields,
-                    adjust_type=config.adjust_type,
-                    time_slice=config.time_slice,
-                    retry_max_attempts=config.retry_max_attempts,
-                    retry_backoff_seconds=config.retry_backoff_seconds,
-                    retry_max_backoff_seconds=config.retry_max_backoff_seconds,
-                )
-                raw = result.value
-                quota_after = _quota_snapshot(provider)
-                quota_delta = _quota_delta(quota_before, quota_after)
-                if quota_delta:
-                    successful_quota_deltas.append(quota_delta)
-                normalized = normalize_tick_frame(raw, fields)
-                atomic_write_parquet(normalized, plan.part_path, **writer)
-                finished_at = utc_now_iso()
-                duration_seconds = round(perf_counter() - started_clock, 6)
-                batch_info["rows"] = int(len(normalized))
-                batch_info["columns"] = list(normalized.columns)
-                batch_info["attempts"] = result.attempts
-                batch_info["quota_after"] = quota_after
-                batch_info["quota_delta_bytes"] = quota_delta
-                metadata["rows"] += int(len(normalized))
-                detail_recorder.record("completed_batches", batch_info)
-                batch_audit_records = []
-                for symbol in plan.symbols:
-                    unit = UnitPlan(plan.trade_date, symbol, plan.part_path)
-                    unit_frame = _filter_unit_frame(
-                        normalized,
-                        unit,
-                    )
-                    unit_rows = int(len(unit_frame))
-                    status = "written"
-                    if unit_rows == 0:
-                        status = "empty_remote"
-                        detail_recorder.record(
-                            "empty_units",
-                            {
-                                "trade_date": plan.trade_date,
-                                "order_book_id": symbol,
-                                "part_path": str(plan.part_path),
-                                "reason": "provider returned no rows",
-                            }
-                        )
-                    detail_recorder.record(
-                        "completed_units",
-                        {
-                            "trade_date": plan.trade_date,
-                            "order_book_id": symbol,
-                            "part_path": str(plan.part_path),
-                            "rows": unit_rows,
-                            "columns": list(unit_frame.columns),
-                            "attempts": result.attempts,
-                            "quota_delta_bytes": quota_delta,
-                        }
-                    )
-                    batch_audit_records.append(
-                        _audit_record(
-                            run_id=run_id,
-                            chunk_id=chunk_id,
-                            unit=unit,
-                            status=status,
-                            rows=unit_rows,
-                            started_at=started_at,
-                            finished_at=finished_at,
-                            duration_seconds=duration_seconds,
-                            quota_before=quota_before,
-                            quota_after=quota_after,
-                            quota_delta=quota_delta,
-                            attempts=result.attempts,
-                        )
-                    )
-                audit_writer.append(batch_audit_records)
-                _write_download_checkpoint(
-                    provider=provider,
-                    metadata=metadata,
-                    detail_recorder=detail_recorder,
-                    audit_writer=audit_writer,
-                    metadata_file=metadata_file,
-                    run_status="running",
-                )
+                result = _fetch_batch_provider_result(ctx, plan, quota_before)
+                if result.quota_delta:
+                    successful_quota_deltas.append(result.quota_delta)
+                _record_batch_success(ctx, attempt, result)
             except Exception as exc:
-                category = getattr(exc, "category", "download_error")
-                quota_after = _quota_snapshot(provider)
-                quota_delta = _quota_delta(quota_before, quota_after)
-                failed_info = {
-                    **batch_info,
-                    "category": category,
-                    "error": str(exc),
-                    "quota_after": quota_after,
-                    "quota_delta_bytes": quota_delta,
-                }
-                detail_recorder.record("failed_batches", failed_info)
-                batch_audit_records = []
-                for symbol in plan.symbols:
-                    unit = UnitPlan(plan.trade_date, symbol, plan.part_path)
-                    if category == "quota":
-                        detail_recorder.record(
-                            "quota_blocked_units",
-                            _unit_info(unit, category=category, error=str(exc))
-                        )
-                    else:
-                        detail_recorder.record(
-                            "failed_units",
-                            _unit_info(unit, category=category, error=str(exc))
-                        )
-                    batch_audit_records.append(
-                        _audit_record(
-                            run_id=run_id,
-                            chunk_id=chunk_id,
-                            unit=unit,
-                            status="quota_blocked" if category == "quota" else "failed",
-                            started_at=started_at,
-                            finished_at=utc_now_iso(),
-                            duration_seconds=round(perf_counter() - started_clock, 6),
-                            quota_before=quota_before,
-                            quota_after=quota_after,
-                            quota_delta=quota_delta,
-                            error_type=str(category),
-                            error_message=str(exc),
-                        )
-                    )
-                audit_writer.append(batch_audit_records)
-                _write_download_checkpoint(
-                    provider=provider,
-                    metadata=metadata,
-                    detail_recorder=detail_recorder,
-                    audit_writer=audit_writer,
-                    metadata_file=metadata_file,
-                    run_status="running",
-                )
+                category = _record_batch_failure(ctx, attempt, exc)
                 if category == "quota" or not config.continue_on_error:
                     raise
         completed = True

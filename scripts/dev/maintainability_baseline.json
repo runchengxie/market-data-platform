@@ -2,7 +2,7 @@
   "generated_on": "2026-05-29",
   "metrics": {
     "functions_over_100": 69,
-    "functions_over_250": 18,
+    "functions_over_250": 17,
     "functions_over_500": 0,
     "functions_with_10_plus_args": 48,
     "largest_files": [
@@ -19,7 +19,7 @@
         "path": "src/market_data_platform/hk_assets/audit_assets.py"
       },
       {
-        "lines": 1673,
+        "lines": 1767,
         "path": "src/market_data_platform/hk_depth/downloader.py"
       },
       {
@@ -68,14 +68,6 @@
       }
     ],
     "largest_functions": [
-      {
-        "arguments": 2,
-        "end_line": 1526,
-        "lines": 393,
-        "name": "_download_batch_tick_depth",
-        "path": "src/market_data_platform/hk_depth/downloader.py",
-        "start_line": 1134
-      },
       {
         "arguments": 2,
         "end_line": 396,
@@ -150,11 +142,11 @@
       },
       {
         "arguments": 2,
-        "end_line": 1107,
+        "end_line": 1142,
         "lines": 295,
         "name": "_download_symbol_date_tick_depth",
         "path": "src/market_data_platform/hk_depth/downloader.py",
-        "start_line": 813
+        "start_line": 848
       },
       {
         "arguments": 1,
@@ -187,18 +179,26 @@
         "name": "_resolve_assets",
         "path": "src/market_data_platform/release_tools/package_assets.py",
         "start_line": 260
+      },
+      {
+        "arguments": 0,
+        "end_line": 277,
+        "lines": 261,
+        "name": "build_parser",
+        "path": "src/market_data_platform/release_tools/hk_asset_workflow_parser.py",
+        "start_line": 17
       }
     ],
     "max_argument_count": 29,
     "max_file_lines": 2791,
-    "max_function_lines": 393,
+    "max_function_lines": 349,
     "public_facade": {
       "exports": 50,
       "path": "src/market_data_platform/hk_assets/_public_exports.py",
       "private_exports": 0
     },
     "python_files": 131,
-    "python_lines": 51041,
+    "python_lines": 51136,
     "roots": [
       "src",
       "scripts",

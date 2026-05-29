@@ -19,6 +19,7 @@ BASELINE_VERSION = 1
 PROTECTED_INCLUDED_PATHS = (
     "src/market_data_platform/config_utils.py",
     "src/market_data_platform/data_provider_contracts.py",
+    "src/market_data_platform/hk_depth/downloader.py",
     "src/market_data_platform/rqdata_cli_common.py",
     "src/market_data_platform/symbols.py",
 )

@@ -84,9 +84,32 @@ exclude = [
   "artifacts",
   "data",
   "reports",
-  # Migrated from rqdata-hk-depth-snapshots; keep runtime migration separate
-  # from the pandas-heavy typing cleanup.
-  "src/market_data_platform/hk_depth",
+  # Keep hk_depth migration debt explicit while letting the refactored
+  # downloader module participate in Pyright.
+  "src/market_data_platform/hk_depth/__init__.py",
+  "src/market_data_platform/hk_depth/aggregate.py",
+  "src/market_data_platform/hk_depth/assets.py",
+  "src/market_data_platform/hk_depth/audit.py",
+  "src/market_data_platform/hk_depth/cli.py",
+  "src/market_data_platform/hk_depth/compact.py",
+  "src/market_data_platform/hk_depth/coverage.py",
+  "src/market_data_platform/hk_depth/download_state.py",
+  "src/market_data_platform/hk_depth/exceptions.py",
+  "src/market_data_platform/hk_depth/fields.py",
+  "src/market_data_platform/hk_depth/health.py",
+  "src/market_data_platform/hk_depth/progress.py",
+  "src/market_data_platform/hk_depth/quality.py",
+  "src/market_data_platform/hk_depth/quota.py",
+  "src/market_data_platform/hk_depth/raw_duplicates.py",
+  "src/market_data_platform/hk_depth/recompress.py",
+  "src/market_data_platform/hk_depth/reconcile.py",
+  "src/market_data_platform/hk_depth/release_assets.py",
+  "src/market_data_platform/hk_depth/rq_client.py",
+  "src/market_data_platform/hk_depth/runtime.py",
+  "src/market_data_platform/hk_depth/schema.py",
+  "src/market_data_platform/hk_depth/storage.py",
+  "src/market_data_platform/hk_depth/symbols.py",
+  "src/market_data_platform/hk_depth/testing.py",
   # Migrated from cross-sectional-trees; keep runtime migration separate from
   # the pandas-heavy typing cleanup.
   "src/market_data_platform/hk_assets",
