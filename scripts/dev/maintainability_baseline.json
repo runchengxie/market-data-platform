@@ -1,10 +1,10 @@
 {
-  "generated_on": "2026-05-28",
+  "generated_on": "2026-05-29",
   "metrics": {
     "functions_over_100": 69,
-    "functions_over_250": 19,
+    "functions_over_250": 18,
     "functions_over_500": 0,
-    "functions_with_10_plus_args": 50,
+    "functions_with_10_plus_args": 48,
     "largest_files": [
       {
         "lines": 2791,
@@ -19,7 +19,7 @@
         "path": "src/market_data_platform/hk_assets/audit_assets.py"
       },
       {
-        "lines": 1725,
+        "lines": 1673,
         "path": "src/market_data_platform/hk_depth/downloader.py"
       },
       {
@@ -35,12 +35,12 @@
         "path": "src/market_data_platform/hk_assets/coverage.py"
       },
       {
-        "lines": 1215,
-        "path": "src/market_data_platform/hk_assets/build.py"
+        "lines": 1367,
+        "path": "src/market_data_platform/hk_assets/intraday_health.py"
       },
       {
-        "lines": 1213,
-        "path": "src/market_data_platform/hk_assets/intraday_health.py"
+        "lines": 1215,
+        "path": "src/market_data_platform/hk_assets/build.py"
       },
       {
         "lines": 1173,
@@ -63,26 +63,18 @@
         "path": "src/market_data_platform/hk_assets/args.py"
       },
       {
-        "lines": 1006,
+        "lines": 1019,
         "path": "src/market_data_platform/cli.py"
       }
     ],
     "largest_functions": [
       {
-        "arguments": 1,
-        "end_line": 1213,
-        "lines": 431,
-        "name": "inspect_hk_intraday_health",
-        "path": "src/market_data_platform/hk_assets/intraday_health.py",
-        "start_line": 783
-      },
-      {
-        "arguments": 24,
-        "end_line": 1540,
-        "lines": 404,
+        "arguments": 2,
+        "end_line": 1526,
+        "lines": 393,
         "name": "_download_batch_tick_depth",
         "path": "src/market_data_platform/hk_depth/downloader.py",
-        "start_line": 1137
+        "start_line": 1134
       },
       {
         "arguments": 2,
@@ -133,14 +125,6 @@
         "start_line": 557
       },
       {
-        "arguments": 24,
-        "end_line": 1110,
-        "lines": 306,
-        "name": "_download_symbol_date_tick_depth",
-        "path": "src/market_data_platform/hk_depth/downloader.py",
-        "start_line": 805
-      },
-      {
         "arguments": 7,
         "end_line": 525,
         "lines": 306,
@@ -165,6 +149,14 @@
         "start_line": 279
       },
       {
+        "arguments": 2,
+        "end_line": 1107,
+        "lines": 295,
+        "name": "_download_symbol_date_tick_depth",
+        "path": "src/market_data_platform/hk_depth/downloader.py",
+        "start_line": 813
+      },
+      {
         "arguments": 1,
         "end_line": 905,
         "lines": 295,
@@ -182,23 +174,31 @@
       },
       {
         "arguments": 1,
-        "end_line": 452,
+        "end_line": 453,
         "lines": 268,
         "name": "_add_rqdata_parser",
         "path": "src/market_data_platform/cli.py",
-        "start_line": 185
+        "start_line": 186
+      },
+      {
+        "arguments": 1,
+        "end_line": 524,
+        "lines": 265,
+        "name": "_resolve_assets",
+        "path": "src/market_data_platform/release_tools/package_assets.py",
+        "start_line": 260
       }
     ],
     "max_argument_count": 29,
     "max_file_lines": 2791,
-    "max_function_lines": 431,
+    "max_function_lines": 393,
     "public_facade": {
       "exports": 50,
       "path": "src/market_data_platform/hk_assets/_public_exports.py",
       "private_exports": 0
     },
-    "python_files": 130,
-    "python_lines": 50701,
+    "python_files": 131,
+    "python_lines": 51041,
     "roots": [
       "src",
       "scripts",

@@ -60,6 +60,30 @@ def test_legacy_hk_depth_console_entry_warns(monkeypatch) -> None:
     assert exc.value.code == 0
 
 
+def test_hk_depth_batch_layout_dry_run_uses_run_context(tmp_path) -> None:
+    assert (
+        main(
+            [
+                "download",
+                "--symbols",
+                "00001.XHKG,00002.XHKG",
+                "--start-date",
+                "20250303",
+                "--end-date",
+                "20250303",
+                "--out",
+                str(tmp_path / "raw"),
+                "--raw-layout",
+                "batch",
+                "--batch-size",
+                "2",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+
+
 def test_hk_depth_offline_pipeline_uses_platform_package(tmp_path) -> None:
     raw_root = tmp_path / "raw"
     daily_path = tmp_path / "daily" / "data.parquet"

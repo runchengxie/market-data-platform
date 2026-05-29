@@ -4,7 +4,7 @@
   "tools": {
     "pyright": {
       "excluded_files": 86,
-      "excluded_lines": 41124,
+      "excluded_lines": 41226,
       "excluded_patterns": [
         ".venv",
         "artifacts",
@@ -23,11 +23,11 @@
       "included_lines": 5785,
       "included_pct": 12.3,
       "total_files": 115,
-      "total_lines": 46909
+      "total_lines": 47011
     },
     "ruff": {
       "excluded_files": 61,
-      "excluded_lines": 33360,
+      "excluded_lines": 33514,
       "excluded_patterns": [
         ".venv",
         "artifacts",
@@ -42,10 +42,10 @@
         "src/market_data_platform/rqdata_runtime.py"
       ],
       "included_files": 54,
-      "included_lines": 13549,
-      "included_pct": 28.9,
+      "included_lines": 13497,
+      "included_pct": 28.7,
       "total_files": 115,
-      "total_lines": 46909
+      "total_lines": 47011
     }
   },
   "version": 1

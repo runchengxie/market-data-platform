@@ -99,6 +99,14 @@ class DownloadConfig:
     metadata_detail_limit: int = 1000
 
 
+@dataclass(frozen=True)
+class DownloadRunContext:
+    config: DownloadConfig
+    storage: dict[str, Any]
+    trade_dates: tuple[str, ...]
+    calendar_source: str
+
+
 def utc_now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -805,75 +813,64 @@ def _filter_unit_frame(normalized: pd.DataFrame, unit: UnitPlan) -> pd.DataFrame
 def _download_symbol_date_tick_depth(
     *,
     provider: TickDataProvider | None,
-    symbols: Sequence[str],
-    start_date: str,
-    end_date: str,
-    output_root: str | Path,
-    fields: Sequence[str],
-    batch_size: int,
-    resume: bool,
-    continue_on_error: bool,
-    dry_run: bool,
-    metadata_kind: str,
-    storage: dict[str, Any],
-    trade_dates: Sequence[str],
-    calendar_source: str,
-    adjust_type: str,
-    time_slice: str | None,
-    retry_max_attempts: int,
-    retry_backoff_seconds: float,
-    retry_max_backoff_seconds: float,
-    quota_guard_enabled: bool,
-    quota_stop_ratio: float,
-    quota_safety_multiplier: float,
-    audit_output: str | Path | None,
-    metadata_detail_limit: int,
+    run: DownloadRunContext,
 ) -> dict[str, Any]:
-    root = Path(output_root)
+    config = run.config
+    symbols = config.symbols
+    fields = config.fields
+    root = config.output_root
+    batch_size = config.batch_size
+    metadata_kind = config.metadata_kind
+    storage = run.storage
+    trade_dates = run.trade_dates
     metadata = _base_metadata(
         kind=metadata_kind,
         symbols=symbols,
-        start_date=start_date,
-        end_date=end_date,
+        start_date=config.start_date,
+        end_date=config.end_date,
         fields=fields,
         output_root=root,
         batch_size=batch_size,
         storage=storage,
         trade_dates=trade_dates,
-        calendar_source=calendar_source,
-        adjust_type=adjust_type,
-        time_slice=time_slice,
+        calendar_source=run.calendar_source,
+        adjust_type=config.adjust_type,
+        time_slice=config.time_slice,
     )
-    if not dry_run and provider is None:
+    if not config.dry_run and provider is None:
         raise DownloadError("A provider is required unless dry_run=True.")
     run_id = str(metadata["run_id"])
-    audit_file = Path(audit_output) if audit_output else default_audit_path(root, metadata_kind)
+    audit_file = (
+        Path(config.audit_output)
+        if config.audit_output
+        else default_audit_path(root, metadata_kind)
+    )
     metadata["audit_path"] = str(audit_file)
     metadata["quota_guard"] = {
-        "enabled": quota_guard_enabled,
-        "stop_ratio": quota_stop_ratio,
-        "safety_multiplier": quota_safety_multiplier,
+        "enabled": config.quota_guard,
+        "stop_ratio": config.quota_stop_ratio,
+        "safety_multiplier": config.quota_safety_multiplier,
         "available": False,
     }
-    metadata["dry_run"] = dry_run
+    metadata["dry_run"] = config.dry_run
     detail_recorder = DownloadMetadataRecorder(
         metadata,
         download_detail_path(root, metadata_kind, run_id),
-        inline_limit=metadata_detail_limit,
+        inline_limit=config.metadata_detail_limit,
     )
 
-    coverage_rows = scan_raw_coverage(root, requested_fields=fields) if resume else []
+    coverage_rows = scan_raw_coverage(root, requested_fields=fields) if config.resume else []
     rows_by_unit = _coverage_by_unit(coverage_rows)
     metadata["coverage"] = coverage_summary(coverage_rows)
-    audit_writer = None if dry_run else IncrementalAuditWriter(audit_file)
+    audit_writer = None if config.dry_run else IncrementalAuditWriter(audit_file)
     dry_audit_counts: Counter[str] = Counter()
     planner = SymbolDatePlanner(
         symbols=symbols,
-        start_date=start_date,
-        end_date=end_date,
+        start_date=config.start_date,
+        end_date=config.end_date,
         root=root,
         trade_dates=trade_dates,
-        resume=resume,
+        resume=config.resume,
         rows_by_unit=rows_by_unit,
         coverage_rows=coverage_rows,
         batch_size=batch_size,
@@ -883,7 +880,7 @@ def _download_symbol_date_tick_depth(
         dry_audit_counts=dry_audit_counts,
     )
     provider_batches = _iter_provider_batches(planner.iter_units_to_download(), batch_size)
-    if dry_run:
+    if config.dry_run:
         for batch in provider_batches:
             detail_recorder.record("planned_batches", _provider_batch_info(batch))
         metadata["audit_status_counts"] = {
@@ -920,9 +917,9 @@ def _download_symbol_date_tick_depth(
             guard = _quota_guard_decision(
                 quota_before,
                 successful_quota_deltas,
-                enabled=quota_guard_enabled,
-                stop_ratio=quota_stop_ratio,
-                safety_multiplier=quota_safety_multiplier,
+                enabled=config.quota_guard,
+                stop_ratio=config.quota_stop_ratio,
+                safety_multiplier=config.quota_safety_multiplier,
             )
             _mark_quota_guard_availability(metadata, guard)
             batch_info["quota_before"] = quota_before
@@ -969,11 +966,11 @@ def _download_symbol_date_tick_depth(
                     symbols=batch.symbols,
                     trade_date=batch.trade_date,
                     fields=fields,
-                    adjust_type=adjust_type,
-                    time_slice=time_slice,
-                    retry_max_attempts=retry_max_attempts,
-                    retry_backoff_seconds=retry_backoff_seconds,
-                    retry_max_backoff_seconds=retry_max_backoff_seconds,
+                    adjust_type=config.adjust_type,
+                    time_slice=config.time_slice,
+                    retry_max_attempts=config.retry_max_attempts,
+                    retry_backoff_seconds=config.retry_backoff_seconds,
+                    retry_max_backoff_seconds=config.retry_max_backoff_seconds,
                 )
                 raw = result.value
                 quota_after = _quota_snapshot(provider)
@@ -1089,7 +1086,7 @@ def _download_symbol_date_tick_depth(
                     metadata_file=metadata_file,
                     run_status="running",
                 )
-                if category == "quota" or not continue_on_error:
+                if category == "quota" or not config.continue_on_error:
                     raise
         completed = True
     finally:
@@ -1105,7 +1102,7 @@ def _download_symbol_date_tick_depth(
         finally:
             detail_recorder.close()
 
-    if detail_recorder.count("failed_batches") and not continue_on_error:
+    if detail_recorder.count("failed_batches") and not config.continue_on_error:
         raise DownloadError("Download failed before completion.")
     return metadata
 
@@ -1137,35 +1134,20 @@ def _batch_part_valid(
 def _download_batch_tick_depth(
     *,
     provider: TickDataProvider | None,
-    symbols: Sequence[str],
-    start_date: str,
-    end_date: str,
-    output_root: str | Path,
-    fields: Sequence[str],
-    batch_size: int,
-    resume: bool,
-    continue_on_error: bool,
-    dry_run: bool,
-    metadata_kind: str,
-    storage: dict[str, Any],
-    trade_dates: Sequence[str],
-    calendar_source: str,
-    adjust_type: str,
-    time_slice: str | None,
-    retry_max_attempts: int,
-    retry_backoff_seconds: float,
-    retry_max_backoff_seconds: float,
-    quota_guard_enabled: bool,
-    quota_stop_ratio: float,
-    quota_safety_multiplier: float,
-    audit_output: str | Path | None,
-    metadata_detail_limit: int,
+    run: DownloadRunContext,
 ) -> dict[str, Any]:
-    root = Path(output_root)
+    config = run.config
+    symbols = config.symbols
+    fields = config.fields
+    root = config.output_root
+    batch_size = config.batch_size
+    metadata_kind = config.metadata_kind
+    storage = run.storage
+    trade_dates = run.trade_dates
     plans = build_batch_plan(
         symbols,
-        start_date,
-        end_date,
+        config.start_date,
+        config.end_date,
         root,
         batch_size,
         trade_dates=trade_dates,
@@ -1173,33 +1155,37 @@ def _download_batch_tick_depth(
     metadata = _base_metadata(
         kind=metadata_kind,
         symbols=symbols,
-        start_date=start_date,
-        end_date=end_date,
+        start_date=config.start_date,
+        end_date=config.end_date,
         fields=fields,
         output_root=root,
         batch_size=batch_size,
         storage=storage,
         trade_dates=trade_dates,
-        calendar_source=calendar_source,
-        adjust_type=adjust_type,
-        time_slice=time_slice,
+        calendar_source=run.calendar_source,
+        adjust_type=config.adjust_type,
+        time_slice=config.time_slice,
     )
-    if not dry_run and provider is None:
+    if not config.dry_run and provider is None:
         raise DownloadError("A provider is required unless dry_run=True.")
     run_id = str(metadata["run_id"])
     preflight_audit_records: list[AuditRecord] = []
-    audit_file = Path(audit_output) if audit_output else default_audit_path(root, metadata_kind)
+    audit_file = (
+        Path(config.audit_output)
+        if config.audit_output
+        else default_audit_path(root, metadata_kind)
+    )
     metadata["audit_path"] = str(audit_file)
     metadata["quota_guard"] = {
-        "enabled": quota_guard_enabled,
-        "stop_ratio": quota_stop_ratio,
-        "safety_multiplier": quota_safety_multiplier,
+        "enabled": config.quota_guard,
+        "stop_ratio": config.quota_stop_ratio,
+        "safety_multiplier": config.quota_safety_multiplier,
         "available": False,
     }
     detail_recorder = DownloadMetadataRecorder(
         metadata,
         download_detail_path(root, metadata_kind, run_id),
-        inline_limit=metadata_detail_limit,
+        inline_limit=config.metadata_detail_limit,
     )
     for plan in plans:
         for symbol in plan.symbols:
@@ -1212,7 +1198,7 @@ def _download_batch_tick_depth(
                 },
             )
     metadata["coverage"] = coverage_summary(scan_raw_coverage(root, requested_fields=fields))
-    metadata["dry_run"] = dry_run
+    metadata["dry_run"] = config.dry_run
 
     plans_to_download: list[BatchPlan] = []
     for plan in plans:
@@ -1222,7 +1208,7 @@ def _download_batch_tick_depth(
             "symbols": list(plan.symbols),
             "part_path": str(plan.part_path),
         }
-        if resume:
+        if config.resume:
             is_valid, rows = _batch_part_valid(
                 plan.part_path,
                 trade_date=plan.trade_date,
@@ -1301,7 +1287,7 @@ def _download_batch_tick_depth(
             },
         )
 
-    if dry_run:
+    if config.dry_run:
         metadata["audit_status_counts"] = summarize_audit(preflight_audit_records)
         metadata["run_status"] = "dry_run"
         detail_recorder.close()
@@ -1338,9 +1324,9 @@ def _download_batch_tick_depth(
             guard = _quota_guard_decision(
                 quota_before,
                 successful_quota_deltas,
-                enabled=quota_guard_enabled,
-                stop_ratio=quota_stop_ratio,
-                safety_multiplier=quota_safety_multiplier,
+                enabled=config.quota_guard,
+                stop_ratio=config.quota_stop_ratio,
+                safety_multiplier=config.quota_safety_multiplier,
             )
             _mark_quota_guard_availability(metadata, guard)
             batch_info["quota_before"] = quota_before
@@ -1390,11 +1376,11 @@ def _download_batch_tick_depth(
                     symbols=plan.symbols,
                     trade_date=plan.trade_date,
                     fields=fields,
-                    adjust_type=adjust_type,
-                    time_slice=time_slice,
-                    retry_max_attempts=retry_max_attempts,
-                    retry_backoff_seconds=retry_backoff_seconds,
-                    retry_max_backoff_seconds=retry_max_backoff_seconds,
+                    adjust_type=config.adjust_type,
+                    time_slice=config.time_slice,
+                    retry_max_attempts=config.retry_max_attempts,
+                    retry_backoff_seconds=config.retry_backoff_seconds,
+                    retry_max_backoff_seconds=config.retry_max_backoff_seconds,
                 )
                 raw = result.value
                 quota_after = _quota_snapshot(provider)
@@ -1519,7 +1505,7 @@ def _download_batch_tick_depth(
                     metadata_file=metadata_file,
                     run_status="running",
                 )
-                if category == "quota" or not continue_on_error:
+                if category == "quota" or not config.continue_on_error:
                     raise
         completed = True
     finally:
@@ -1535,7 +1521,7 @@ def _download_batch_tick_depth(
         finally:
             detail_recorder.close()
 
-    if detail_recorder.count("failed_batches") and not continue_on_error:
+    if detail_recorder.count("failed_batches") and not config.continue_on_error:
         raise DownloadError("Download failed before completion.")
     return metadata
 
@@ -1609,58 +1595,20 @@ def download_tick_depth(
         parquet_compression=config.parquet_compression,
         parquet_compression_level=config.parquet_compression_level,
     )
+    run = DownloadRunContext(
+        config=config,
+        storage=storage,
+        trade_dates=tuple(trade_dates),
+        calendar_source=calendar_source,
+    )
     if config.raw_layout == "batch":
         return _download_batch_tick_depth(
             provider=provider,
-            symbols=config.symbols,
-            start_date=config.start_date,
-            end_date=config.end_date,
-            output_root=config.output_root,
-            fields=config.fields,
-            batch_size=config.batch_size,
-            resume=config.resume,
-            continue_on_error=config.continue_on_error,
-            dry_run=config.dry_run,
-            metadata_kind=config.metadata_kind,
-            storage=storage,
-            trade_dates=trade_dates,
-            calendar_source=calendar_source,
-            adjust_type=config.adjust_type,
-            time_slice=config.time_slice,
-            retry_max_attempts=config.retry_max_attempts,
-            retry_backoff_seconds=config.retry_backoff_seconds,
-            retry_max_backoff_seconds=config.retry_max_backoff_seconds,
-            quota_guard_enabled=config.quota_guard,
-            quota_stop_ratio=config.quota_stop_ratio,
-            quota_safety_multiplier=config.quota_safety_multiplier,
-            audit_output=config.audit_output,
-            metadata_detail_limit=config.metadata_detail_limit,
+            run=run,
         )
     return _download_symbol_date_tick_depth(
         provider=provider,
-        symbols=config.symbols,
-        start_date=config.start_date,
-        end_date=config.end_date,
-        output_root=config.output_root,
-        fields=config.fields,
-        batch_size=config.batch_size,
-        resume=config.resume,
-        continue_on_error=config.continue_on_error,
-        dry_run=config.dry_run,
-        metadata_kind=config.metadata_kind,
-        storage=storage,
-        trade_dates=trade_dates,
-        calendar_source=calendar_source,
-        adjust_type=config.adjust_type,
-        time_slice=config.time_slice,
-        retry_max_attempts=config.retry_max_attempts,
-        retry_backoff_seconds=config.retry_backoff_seconds,
-        retry_max_backoff_seconds=config.retry_max_backoff_seconds,
-        quota_guard_enabled=config.quota_guard,
-        quota_stop_ratio=config.quota_stop_ratio,
-        quota_safety_multiplier=config.quota_safety_multiplier,
-        audit_output=config.audit_output,
-        metadata_detail_limit=config.metadata_detail_limit,
+        run=run,
     )
 
 

@@ -821,7 +821,7 @@ def _render_intraday_health_text(payload: Mapping[str, object]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def inspect_hk_intraday_health(args) -> int:
+def _build_intraday_health_config(args) -> IntradayHealthConfig:
     input_specs = list(getattr(args, "input", []) or [])
     if not input_specs:
         raise SystemExit("At least one --input is required.")
@@ -839,11 +839,29 @@ def inspect_hk_intraday_health(args) -> int:
     daily_adjust_type = _normalize_adjust_type(getattr(args, "daily_adjust_type", None))
     if daily_adjust_type is None:
         daily_adjust_type = _manifest_query_adjust_type(daily_asset_dir)
+    out_path = _resolve_path(args.out) if getattr(args, "out", None) else None
+    return IntradayHealthConfig(
+        input_specs=input_specs,
+        parquet_paths=list(parquet_paths),
+        sample_limit=sample_limit,
+        expected_bars_per_day=expected_bars_per_day,
+        numeric_rtol=numeric_rtol,
+        numeric_atol=numeric_atol,
+        daily_asset_dir=daily_asset_dir,
+        intraday_adjust_type=intraday_adjust_type,
+        daily_adjust_type=daily_adjust_type,
+        fail_on_severity=str(getattr(args, "fail_on_severity", "none") or "none"),
+        output_format=str(getattr(args, "format", "text") or "text").strip().lower(),
+        out_path=out_path,
+    )
 
+
+def _scan_intraday_health_inputs(config: IntradayHealthConfig) -> IntradayHealthScan:
     duplicate_timestamp_groups = 0
     duplicate_timestamp_rows = 0
     missing_bar_symbol_days = 0
     missing_bar_rows = 0
+    unexpected_bar_count_symbol_days = 0
     off_schedule_bar_rows = 0
     negative_volume_rows = 0
     negative_amount_rows = 0
@@ -859,7 +877,7 @@ def inspect_hk_intraday_health(args) -> int:
     sample_off_schedule_rows: list[dict[str, object]] = []
     daily_parts: list[pd.DataFrame] = []
 
-    for parquet_path in parquet_paths:
+    for parquet_path in config.parquet_paths:
         for frame in _read_intraday_frame_chunks(parquet_path):
             work = _normalize_intraday_frame(frame)
             if work.empty:
@@ -877,7 +895,7 @@ def inspect_hk_intraday_health(args) -> int:
             duplicate_groups = duplicate_groups.loc[duplicate_groups["duplicate_rows"] > 1].copy()
             duplicate_timestamp_groups += int(len(duplicate_groups))
             duplicate_timestamp_rows += int(duplicate_groups["duplicate_rows"].sum()) if not duplicate_groups.empty else 0
-            for _, row in duplicate_groups.head(sample_limit).iterrows():
+            for _, row in duplicate_groups.head(config.sample_limit).iterrows():
                 _append_sample(
                     sample_duplicate_rows,
                     {
@@ -885,7 +903,7 @@ def inspect_hk_intraday_health(args) -> int:
                         "trade_datetime": pd.to_datetime(row["trade_datetime"]),
                         "duplicate_rows": row["duplicate_rows"],
                     },
-                    limit=sample_limit,
+                    limit=config.sample_limit,
                 )
 
             negative_volume_mask = work["volume"].notna() & (work["volume"] < 0.0)
@@ -895,7 +913,7 @@ def inspect_hk_intraday_health(args) -> int:
             for field_name, mask in (("volume", negative_volume_mask), ("amount", negative_amount_mask)):
                 if not bool(mask.any()):
                     continue
-                for _, row in work.loc[mask].head(sample_limit).iterrows():
+                for _, row in work.loc[mask].head(config.sample_limit).iterrows():
                     _append_sample(
                         sample_negative_rows,
                         {
@@ -904,13 +922,13 @@ def inspect_hk_intraday_health(args) -> int:
                             "field": field_name,
                             "value": row[field_name],
                         },
-                        limit=sample_limit,
+                        limit=config.sample_limit,
                     )
 
             off_schedule_mask = ~work["time_key"].isin(_EXPECTED_HK_5M_TIME_KEY_SET)
             off_schedule_bar_rows += int(off_schedule_mask.sum())
             if bool(off_schedule_mask.any()):
-                for _, row in work.loc[off_schedule_mask].head(sample_limit).iterrows():
+                for _, row in work.loc[off_schedule_mask].head(config.sample_limit).iterrows():
                     _append_sample(
                         sample_off_schedule_rows,
                         {
@@ -918,7 +936,7 @@ def inspect_hk_intraday_health(args) -> int:
                             "trade_datetime": row["trade_datetime"],
                             "time_key": row["time_key"],
                         },
-                        limit=sample_limit,
+                        limit=config.sample_limit,
                     )
 
             deduped = (
@@ -937,9 +955,10 @@ def inspect_hk_intraday_health(args) -> int:
             expected_lo_mask, expected_hi_mask, expected_bars_for_date = _expected_masks_for_date(
                 row["trade_date"],
                 inferred_half_day_dates,
-                full_day_expected_bars=expected_bars_per_day,
+                full_day_expected_bars=config.expected_bars_per_day,
             )
             if observed_bars != expected_bars_for_date:
+                unexpected_bar_count_symbol_days += 1
                 _append_sample(
                     sample_unexpected_bar_count_symbol_days,
                     {
@@ -948,7 +967,7 @@ def inspect_hk_intraday_health(args) -> int:
                         "observed_bars": observed_bars,
                         "expected_bars": expected_bars_for_date,
                     },
-                    limit=sample_limit,
+                    limit=config.sample_limit,
                 )
 
             missing_times = _missing_times_from_masks(
@@ -969,95 +988,109 @@ def inspect_hk_intraday_health(args) -> int:
                         "missing_bars": len(missing_times),
                         "sample_missing_times": ",".join(missing_times[:5]),
                     },
-                    limit=sample_limit,
+                    limit=config.sample_limit,
                 )
 
-    reconciliation = None
-    if daily_asset_dir is not None:
-        reconciliation = _build_daily_reconciliation(
-            intraday_daily=intraday_daily,
-            daily_asset_dir=daily_asset_dir,
-            sample_limit=sample_limit,
-            rtol=numeric_rtol,
-            atol=numeric_atol,
-            intraday_adjust_type=intraday_adjust_type,
-            daily_adjust_type=daily_adjust_type,
-        )
+    return IntradayHealthScan(
+        rows_scanned=rows_scanned,
+        symbols_seen=symbols_seen,
+        trade_date_min=trade_date_min,
+        trade_date_max=trade_date_max,
+        intraday_daily=intraday_daily,
+        inferred_half_day_dates=inferred_half_day_dates,
+        duplicate_timestamp_groups=duplicate_timestamp_groups,
+        duplicate_timestamp_rows=duplicate_timestamp_rows,
+        missing_bar_symbol_days=missing_bar_symbol_days,
+        missing_bar_rows=missing_bar_rows,
+        unexpected_bar_count_symbol_days=unexpected_bar_count_symbol_days,
+        off_schedule_bar_rows=off_schedule_bar_rows,
+        negative_volume_rows=negative_volume_rows,
+        negative_amount_rows=negative_amount_rows,
+        bar_count_values=bar_count_values,
+        sample_duplicate_rows=sample_duplicate_rows,
+        sample_missing_symbol_days=sample_missing_symbol_days,
+        sample_negative_rows=sample_negative_rows,
+        sample_unexpected_bar_count_symbol_days=sample_unexpected_bar_count_symbol_days,
+        sample_off_schedule_rows=sample_off_schedule_rows,
+    )
 
+
+def _build_intraday_quality_checks(
+    *,
+    scan: IntradayHealthScan,
+    reconciliation: Mapping[str, object] | None,
+) -> tuple[list[dict[str, object]], Mapping[str, object]]:
     quality_checks: list[dict[str, object]] = []
-    symbol_days_scanned = int(len(intraday_daily))
-    if duplicate_timestamp_groups > 0:
+    symbol_days_scanned = int(len(scan.intraday_daily))
+    if scan.duplicate_timestamp_groups > 0:
         quality_checks.append(
             {
                 "check": "duplicate_intraday_timestamps",
                 "severity": "error",
-                "affected_items": duplicate_timestamp_groups,
-                "affected_pct": _round_pct(duplicate_timestamp_groups, symbol_days_scanned),
-                "sample_rows": sample_duplicate_rows,
+                "affected_items": scan.duplicate_timestamp_groups,
+                "affected_pct": _round_pct(scan.duplicate_timestamp_groups, symbol_days_scanned),
+                "sample_rows": scan.sample_duplicate_rows,
             }
         )
-    if missing_bar_symbol_days > 0:
+    if scan.missing_bar_symbol_days > 0:
         quality_checks.append(
             {
                 "check": "intraday_missing_bars_vs_expected_schedule",
                 "severity": "warning",
-                "affected_items": missing_bar_symbol_days,
-                "affected_pct": _round_pct(missing_bar_symbol_days, symbol_days_scanned),
-                "sample_rows": sample_missing_symbol_days,
+                "affected_items": scan.missing_bar_symbol_days,
+                "affected_pct": _round_pct(scan.missing_bar_symbol_days, symbol_days_scanned),
+                "sample_rows": scan.sample_missing_symbol_days,
             }
         )
-    unexpected_bar_count_symbol_days = 0
-    if not intraday_daily.empty:
-        for _, row in intraday_daily.iterrows():
-            _, _, expected_bars_for_date = _expected_masks_for_date(
-                row["trade_date"],
-                inferred_half_day_dates,
-                full_day_expected_bars=expected_bars_per_day,
-            )
-            if int(row["intraday_bar_count"]) != expected_bars_for_date:
-                unexpected_bar_count_symbol_days += 1
-    if unexpected_bar_count_symbol_days > 0:
+    if scan.unexpected_bar_count_symbol_days > 0:
         quality_checks.append(
             {
                 "check": "intraday_unexpected_session_bar_count",
                 "severity": "warning",
-                "affected_items": unexpected_bar_count_symbol_days,
-                "affected_pct": _round_pct(unexpected_bar_count_symbol_days, symbol_days_scanned),
-                "sample_rows": sample_unexpected_bar_count_symbol_days,
+                "affected_items": scan.unexpected_bar_count_symbol_days,
+                "affected_pct": _round_pct(
+                    scan.unexpected_bar_count_symbol_days,
+                    symbol_days_scanned,
+                ),
+                "sample_rows": scan.sample_unexpected_bar_count_symbol_days,
             }
         )
-    if negative_volume_rows > 0:
+    if scan.negative_volume_rows > 0:
         quality_checks.append(
             {
                 "check": "intraday_negative_volume_rows",
                 "severity": "error",
-                "affected_items": negative_volume_rows,
-                "affected_pct": _round_pct(negative_volume_rows, rows_scanned),
-                "sample_rows": [row for row in sample_negative_rows if row.get("field") == "volume"],
+                "affected_items": scan.negative_volume_rows,
+                "affected_pct": _round_pct(scan.negative_volume_rows, scan.rows_scanned),
+                "sample_rows": [
+                    row for row in scan.sample_negative_rows if row.get("field") == "volume"
+                ],
             }
         )
-    if negative_amount_rows > 0:
+    if scan.negative_amount_rows > 0:
         quality_checks.append(
             {
                 "check": "intraday_negative_amount_rows",
                 "severity": "error",
-                "affected_items": negative_amount_rows,
-                "affected_pct": _round_pct(negative_amount_rows, rows_scanned),
-                "sample_rows": [row for row in sample_negative_rows if row.get("field") == "amount"],
+                "affected_items": scan.negative_amount_rows,
+                "affected_pct": _round_pct(scan.negative_amount_rows, scan.rows_scanned),
+                "sample_rows": [
+                    row for row in scan.sample_negative_rows if row.get("field") == "amount"
+                ],
             }
         )
-    if off_schedule_bar_rows > 0:
+    if scan.off_schedule_bar_rows > 0:
         quality_checks.append(
             {
                 "check": "intraday_off_schedule_bar_rows",
                 "severity": "warning",
-                "affected_items": off_schedule_bar_rows,
-                "affected_pct": _round_pct(off_schedule_bar_rows, rows_scanned),
-                "sample_rows": sample_off_schedule_rows,
+                "affected_items": scan.off_schedule_bar_rows,
+                "affected_pct": _round_pct(scan.off_schedule_bar_rows, scan.rows_scanned),
+                "sample_rows": scan.sample_off_schedule_rows,
             }
         )
 
-    reconciliation_summary = {}
+    reconciliation_summary: Mapping[str, object] = {}
     if isinstance(reconciliation, Mapping):
         reconciliation_summary = (
             reconciliation.get("summary") if isinstance(reconciliation.get("summary"), Mapping) else {}
@@ -1068,7 +1101,9 @@ def inspect_hk_intraday_health(args) -> int:
                     "check": "intraday_daily_rows_missing_from_asset",
                     "asset_key": "daily_clean",
                     "severity": "warning",
-                    "affected_items": int(reconciliation_summary.get("missing_daily_symbol_days") or 0),
+                    "affected_items": int(
+                        reconciliation_summary.get("missing_daily_symbol_days") or 0
+                    ),
                     "affected_pct": _round_pct(
                         int(reconciliation_summary.get("missing_daily_symbol_days") or 0),
                         symbol_days_scanned,
@@ -1091,7 +1126,8 @@ def inspect_hk_intraday_health(args) -> int:
                     "affected_pct": _round_pct(inactive_zero_count, symbol_days_scanned),
                     "classification": "provider-inactive-boundary",
                     "sample_rows": list(
-                        reconciliation.get("sample_inactive_zero_volume_intraday_after_daily_end") or []
+                        reconciliation.get("sample_inactive_zero_volume_intraday_after_daily_end")
+                        or []
                     ),
                 }
             )
@@ -1101,10 +1137,14 @@ def inspect_hk_intraday_health(args) -> int:
                     "check": "inactive_zero_volume_intraday_without_daily_row",
                     "severity": "info",
                     "affected_items": inactive_zero_missing_daily_count,
-                    "affected_pct": _round_pct(inactive_zero_missing_daily_count, symbol_days_scanned),
+                    "affected_pct": _round_pct(
+                        inactive_zero_missing_daily_count,
+                        symbol_days_scanned,
+                    ),
                     "classification": "provider-inactive-boundary",
                     "sample_rows": list(
-                        reconciliation.get("sample_inactive_zero_volume_intraday_missing_daily_row") or []
+                        reconciliation.get("sample_inactive_zero_volume_intraday_missing_daily_row")
+                        or []
                     ),
                 }
             )
@@ -1134,7 +1174,10 @@ def inspect_hk_intraday_health(args) -> int:
                     "asset_key": "intraday",
                     "severity": "warning",
                     "affected_items": daily_active_missing_intraday_count,
-                    "affected_pct": _round_pct(daily_active_missing_intraday_count, symbol_days_scanned),
+                    "affected_pct": _round_pct(
+                        daily_active_missing_intraday_count,
+                        symbol_days_scanned,
+                    ),
                     "sample_rows": list(
                         reconciliation.get("sample_daily_active_missing_intraday_rows") or []
                     ),
@@ -1169,7 +1212,10 @@ def inspect_hk_intraday_health(args) -> int:
                     "check": field_name,
                     "severity": check_severity,
                     "affected_items": affected,
-                    "affected_pct": _round_pct(affected, int(reconciliation_summary.get("reconciled_symbol_days") or 0)),
+                    "affected_pct": _round_pct(
+                        affected,
+                        int(reconciliation_summary.get("reconciled_symbol_days") or 0),
+                    ),
                     "sample_rows": [
                         row
                         for row in (reconciliation.get("sample_mismatch_rows") or [])
@@ -1178,77 +1224,144 @@ def inspect_hk_intraday_health(args) -> int:
                     **({"classification": classification} if classification else {}),
                 }
             )
+    return quality_checks, reconciliation_summary
 
-    summary = {
-        "input_count": len(input_specs),
-        "parquet_files_scanned": len(parquet_paths),
-        "rows_scanned": rows_scanned,
-        "symbols_scanned": len(symbols_seen),
-        "symbol_days_scanned": symbol_days_scanned,
-        "trade_date_min": _format_date(trade_date_min),
-        "trade_date_max": _format_date(trade_date_max),
-        "expected_bars_per_day": expected_bars_per_day,
-        "intraday_adjust_type": intraday_adjust_type,
-        "daily_adjust_type": daily_adjust_type,
+
+def _build_intraday_health_summary(
+    *,
+    config: IntradayHealthConfig,
+    scan: IntradayHealthScan,
+    reconciliation_summary: Mapping[str, object],
+    quality_checks: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    return {
+        "input_count": len(config.input_specs),
+        "parquet_files_scanned": len(config.parquet_paths),
+        "rows_scanned": scan.rows_scanned,
+        "symbols_scanned": len(scan.symbols_seen),
+        "symbol_days_scanned": int(len(scan.intraday_daily)),
+        "trade_date_min": _format_date(scan.trade_date_min),
+        "trade_date_max": _format_date(scan.trade_date_max),
+        "expected_bars_per_day": config.expected_bars_per_day,
+        "intraday_adjust_type": config.intraday_adjust_type,
+        "daily_adjust_type": config.daily_adjust_type,
         "daily_reconciliation_price_adjustment_basis_mismatch": bool(
             reconciliation_summary.get("price_adjustment_basis_mismatch")
         ),
-        "inferred_half_day_dates": sorted(inferred_half_day_dates),
-        "inferred_half_day_count": len(inferred_half_day_dates),
-        "duplicate_timestamp_groups": duplicate_timestamp_groups,
-        "duplicate_timestamp_rows": duplicate_timestamp_rows,
-        "symbol_days_with_missing_bars": missing_bar_symbol_days,
-        "missing_bar_rows": missing_bar_rows,
-        "off_schedule_bar_rows": off_schedule_bar_rows,
-        "bar_count_min": min(bar_count_values) if bar_count_values else None,
-        "bar_count_p50": _quantile_or_none(bar_count_values, 0.5),
-        "bar_count_p90": _quantile_or_none(bar_count_values, 0.9),
-        "bar_count_max": max(bar_count_values) if bar_count_values else None,
-        "symbol_days_with_unexpected_bar_count": unexpected_bar_count_symbol_days,
-        "negative_volume_rows": negative_volume_rows,
-        "negative_amount_rows": negative_amount_rows,
-        "daily_reconciliation_symbol_days": int(reconciliation_summary.get("reconciled_symbol_days") or 0),
-        "daily_reconciliation_missing_daily_rows": int(reconciliation_summary.get("missing_daily_symbol_days") or 0),
+        "inferred_half_day_dates": sorted(scan.inferred_half_day_dates),
+        "inferred_half_day_count": len(scan.inferred_half_day_dates),
+        "duplicate_timestamp_groups": scan.duplicate_timestamp_groups,
+        "duplicate_timestamp_rows": scan.duplicate_timestamp_rows,
+        "symbol_days_with_missing_bars": scan.missing_bar_symbol_days,
+        "missing_bar_rows": scan.missing_bar_rows,
+        "off_schedule_bar_rows": scan.off_schedule_bar_rows,
+        "bar_count_min": min(scan.bar_count_values) if scan.bar_count_values else None,
+        "bar_count_p50": _quantile_or_none(scan.bar_count_values, 0.5),
+        "bar_count_p90": _quantile_or_none(scan.bar_count_values, 0.9),
+        "bar_count_max": max(scan.bar_count_values) if scan.bar_count_values else None,
+        "symbol_days_with_unexpected_bar_count": scan.unexpected_bar_count_symbol_days,
+        "negative_volume_rows": scan.negative_volume_rows,
+        "negative_amount_rows": scan.negative_amount_rows,
+        "daily_reconciliation_symbol_days": int(
+            reconciliation_summary.get("reconciled_symbol_days") or 0
+        ),
+        "daily_reconciliation_missing_daily_rows": int(
+            reconciliation_summary.get("missing_daily_symbol_days") or 0
+        ),
         "daily_reconciliation_inactive_zero_volume_after_daily_end_rows": int(
-            reconciliation_summary.get("inactive_zero_volume_intraday_after_daily_end_symbol_days") or 0
+            reconciliation_summary.get(
+                "inactive_zero_volume_intraday_after_daily_end_symbol_days"
+            )
+            or 0
         ),
         "daily_reconciliation_inactive_zero_volume_missing_daily_rows": int(
-            reconciliation_summary.get("inactive_zero_volume_intraday_missing_daily_row_symbol_days") or 0
+            reconciliation_summary.get(
+                "inactive_zero_volume_intraday_missing_daily_row_symbol_days"
+            )
+            or 0
         ),
         "daily_reconciliation_intraday_after_daily_end_with_trading_rows": int(
-            reconciliation_summary.get("intraday_after_daily_end_with_trading_symbol_days") or 0
+            reconciliation_summary.get("intraday_after_daily_end_with_trading_symbol_days")
+            or 0
         ),
         "daily_reconciliation_daily_active_missing_intraday_rows": int(
             reconciliation_summary.get("daily_active_symbol_days_missing_intraday") or 0
         ),
         "quality_check_issue_count": len(quality_checks),
     }
+
+
+def _build_intraday_health_payload(
+    *,
+    config: IntradayHealthConfig,
+    scan: IntradayHealthScan,
+    reconciliation: Mapping[str, object] | None,
+) -> dict[str, object]:
+    quality_checks, reconciliation_summary = _build_intraday_quality_checks(
+        scan=scan,
+        reconciliation=reconciliation,
+    )
+    summary = _build_intraday_health_summary(
+        config=config,
+        scan=scan,
+        reconciliation_summary=reconciliation_summary,
+        quality_checks=quality_checks,
+    )
     quality_verdict = summarize_quality_checks(
         quality_checks,
-        fail_on_severity=getattr(args, "fail_on_severity", "none"),
+        fail_on_severity=config.fail_on_severity,
     )
-    payload = {
+    return {
         "summary": summary,
         "quality_verdict": quality_verdict,
-        "sample_duplicate_timestamps": sample_duplicate_rows,
-        "sample_missing_symbol_days": sample_missing_symbol_days,
-        "sample_negative_rows": sample_negative_rows,
-        "sample_unexpected_bar_count_symbol_days": sample_unexpected_bar_count_symbol_days,
-        "sample_off_schedule_rows": sample_off_schedule_rows,
+        "sample_duplicate_timestamps": scan.sample_duplicate_rows,
+        "sample_missing_symbol_days": scan.sample_missing_symbol_days,
+        "sample_negative_rows": scan.sample_negative_rows,
+        "sample_unexpected_bar_count_symbol_days": scan.sample_unexpected_bar_count_symbol_days,
+        "sample_off_schedule_rows": scan.sample_off_schedule_rows,
         "daily_reconciliation": reconciliation,
         "quality_checks": quality_checks,
     }
 
-    output_format = str(getattr(args, "format", "text") or "text").strip().lower()
-    if output_format == "json":
-        rendered = json.dumps(payload, ensure_ascii=False, indent=2)
-    else:
-        rendered = _render_intraday_health_text(payload)
 
-    out_path = _resolve_path(args.out) if getattr(args, "out", None) else None
+def _render_intraday_health_payload(
+    payload: Mapping[str, object],
+    *,
+    output_format: str,
+) -> str:
+    if output_format == "json":
+        return json.dumps(payload, ensure_ascii=False, indent=2)
+    return _render_intraday_health_text(payload)
+
+
+def _write_or_print_intraday_health(rendered: str, out_path: Path | None) -> None:
     if out_path is not None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(rendered, encoding="utf-8")
     else:
         print(rendered, end="")
-    return quality_gate_exit_code(quality_verdict)
+
+
+def inspect_hk_intraday_health(args) -> int:
+    config = _build_intraday_health_config(args)
+    scan = _scan_intraday_health_inputs(config)
+    reconciliation = None
+    if config.daily_asset_dir is not None:
+        reconciliation = _build_daily_reconciliation(
+            intraday_daily=scan.intraday_daily,
+            daily_asset_dir=config.daily_asset_dir,
+            sample_limit=config.sample_limit,
+            rtol=config.numeric_rtol,
+            atol=config.numeric_atol,
+            intraday_adjust_type=config.intraday_adjust_type,
+            daily_adjust_type=config.daily_adjust_type,
+        )
+    payload = _build_intraday_health_payload(
+        config=config,
+        scan=scan,
+        reconciliation=reconciliation,
+    )
+    rendered = _render_intraday_health_payload(payload, output_format=config.output_format)
+    _write_or_print_intraday_health(rendered, config.out_path)
+    verdict = payload["quality_verdict"]
+    return quality_gate_exit_code(verdict if isinstance(verdict, Mapping) else {})
