@@ -1,6 +1,6 @@
 # HK 数据资产维护
 
-本页是 HK 数据资产生命周期的维护入口。`cross-sectional-trees` 只消费这里发布的数据资产，不再负责下载、清洗、健康检查、current contract 或 release。
+本页是 HK 数据资产生命周期的维护入口。`cross-sectional-trees` 只消费这里发布的数据资产，下载、清洗、健康检查、current contract 和 release 由本仓库维护。
 
 ## 入口命令
 
@@ -13,7 +13,7 @@ marketdata rqdata refresh-hk-intraday --help
 marketdata rqdata refresh-hk-fundamentals --help
 ```
 
-安装本包后也保留兼容命令：
+安装本包后也提供兼容命令：
 
 ```bash
 rqdata-hk-assets --help
@@ -74,7 +74,7 @@ marketdata rqdata refresh-hk-intraday \
 ```
 
 底层实现位于 `market_data_platform.hk_assets.intraday_download`。旧的
-`python -m cstree.research.hk_intraday_download` 只是 cross 仓库里的兼容 wrapper。
+`python -m cstree.research.hk_intraday_download` 是 cross 仓库里的兼容 wrapper。
 
 ## 历史 cross 产物导入
 
@@ -94,4 +94,4 @@ marketdata migration import-cross-artifacts \
   --apply
 ```
 
-该命令只迁移平台归属的 assets、metadata、intraday cache、release 和 HK health/audit 报告；研究 runs、sweeps、live/export、benchmark 和 slippage 报告仍留在策略仓库。
+该命令只迁移平台归属的 assets、metadata、intraday cache、release 和 HK health/audit 报告；研究 runs、sweeps、live/export、benchmark 和 slippage 报告留在策略仓库。

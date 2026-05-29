@@ -60,6 +60,19 @@ def test_legacy_hk_depth_console_entry_warns(monkeypatch) -> None:
     assert exc.value.code == 0
 
 
+def test_legacy_hk_assets_console_entry_warns(monkeypatch) -> None:
+    from market_data_platform.hk_assets import cli
+
+    monkeypatch.setattr(sys, "argv", ["rqdata-hk-assets", "--help"])
+    monkeypatch.setattr(cli, "main", lambda: 0)
+
+    with pytest.warns(FutureWarning, match="marketdata rqdata hk-assets"):
+        with pytest.raises(SystemExit) as exc:
+            cli.main_entry()
+
+    assert exc.value.code == 0
+
+
 def test_hk_depth_batch_layout_dry_run_uses_run_context(tmp_path) -> None:
     assert (
         main(

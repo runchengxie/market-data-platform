@@ -10,7 +10,7 @@
 export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-`DATA_PLATFORM_ROOT` 是推荐使用的跨项目通用环境变量，用于指定共享市场数据输入路径。`HK_DATA_PLATFORM_ROOT` 仍作为旧 HK 调用方的兼容变量保留。`CSTREE_ARTIFACTS_ROOT` 用于覆盖策略输出根目录；下游项目只有在需要把运行记录、缓存或报告也写入共享根目录时才应使用它。
+`DATA_PLATFORM_ROOT` 是推荐使用的跨项目通用环境变量，用于指定共享市场数据输入路径。`HK_DATA_PLATFORM_ROOT` 作为旧 HK 调用方的兼容变量保留。`CSTREE_ARTIFACTS_ROOT` 用于覆盖策略输出根目录；下游项目只在需要把运行记录、缓存或报告也写入共享根目录时使用它。
 
 ## 当前数据契约
 

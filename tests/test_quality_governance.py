@@ -141,3 +141,24 @@ def test_architecture_governance_flags_private_test_facade_import(tmp_path: Path
 
     assert issues
     assert issues[0].message.endswith("_private_helper")
+
+
+def test_docs_link_maintenance_audit_and_avoid_contrast_filler() -> None:
+    docs_root = Path("docs")
+    docs_index = docs_root.joinpath("README.md").read_text(encoding="utf-8")
+
+    assert "maintenance-audit.md" in docs_index
+
+    checked_docs = [
+        Path("README.md"),
+        Path("AGENTS.md"),
+        *sorted(docs_root.glob("*.md")),
+    ]
+    forbidden_phrases = ("不是", "而是", "目标不是")
+    offenders = [
+        str(path)
+        for path in checked_docs
+        if any(phrase in path.read_text(encoding="utf-8") for phrase in forbidden_phrases)
+    ]
+
+    assert offenders == []

@@ -2,7 +2,7 @@
 
 ## 阶段一：共享数据契约 (Shared Contract)
 
-**当前状态**：已建立 contract / registry / provider 基础能力，HK tick-depth 和 HK assets 生产实现已迁入平台；`cross-sectional-trees` 已进入只读消费边界，`rqdata-hk-depth-snapshots` 已从 `research-workspace` sunset
+**当前状态**：已建立 contract / registry / provider 基础能力，HK tick-depth 和 HK assets 生产实现已由平台维护；`cross-sectional-trees` 已进入只读消费边界，`rqdata-hk-depth-snapshots` 已从 `research-workspace` 移除。
 
 - 创建当前代码仓库。
 - 现有项目中的数据处理实现逻辑保持不变。
@@ -35,8 +35,8 @@
 
 ## 阶段三点五：吸收兼容仓库
 
-- `rqdata-hk-depth-snapshots` 已被 `research-workspace` 移除，不再作为子模块追踪。
-- workspace 不再承诺支持 `rqdata_tick_data.*` 旧 Python import 路径。
+- `rqdata-hk-depth-snapshots` 已被 `research-workspace` 移除，不作为子模块追踪。
+- workspace 不支持 `rqdata_tick_data.*` 旧 Python import 路径。
 - 新的下载、健康检查、聚合、对账和发布修复只进入 `market-data-platform`。
 
 ## 阶段三点六：迁移 HK assets 生产实现
@@ -59,7 +59,7 @@
 - 已解析的资产路径 (resolved asset paths)
 - 数据资产清单 (asset manifests)
 
-该项目将彻底剥离底层逻辑，不再负责数据源资产的更新拉取、注册表的生成以及发布的打包逻辑。
+该项目只保留策略层逻辑，数据源资产更新、注册表生成和发布打包逻辑由本仓库维护。
 
 历史遗留在 `cross-sectional-trees/artifacts` 下的数据平台产物可通过
 `marketdata migration import-cross-artifacts` 复制到 `market-data-platform/artifacts`。

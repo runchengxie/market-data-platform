@@ -49,9 +49,9 @@ def patch_rqdatac_adjust_price_readonly(logger: logging.Logger) -> None:
         for order_book_id, slice_ in obid_slice_map.items():
             if order_book_id not in order_book_ids:
                 continue
-            timestamps = timestamps_level[slice_]
+            sliced_timestamps = timestamps_level[slice_]
 
-            def calculate_factor(factors_map, order_book_id):
+            def calculate_factor(factors_map, order_book_id, timestamps):
                 factors = factors_map.get(order_book_id, None)
                 if factors is not None:
                     factor = np.take(
@@ -61,13 +61,18 @@ def patch_rqdatac_adjust_price_readonly(logger: logging.Logger) -> None:
                     if pre:
                         factor /= factors.iloc[-1]
                     return factor
+                return None
 
-            factor = calculate_factor(ex_factors, order_book_id)
+            factor = calculate_factor(ex_factors, order_book_id, sliced_timestamps)
             if factor is None:
                 continue
 
             if not volume_adjust_by_ex_factor:
-                factor_volume = calculate_factor(volume_adjust_factors, order_book_id)
+                factor_volume = calculate_factor(
+                    volume_adjust_factors,
+                    order_book_id,
+                    sliced_timestamps,
+                )
             else:
                 factor_volume = factor
 

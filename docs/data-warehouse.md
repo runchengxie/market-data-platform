@@ -1,6 +1,6 @@
 # 数据目录、标准层与 DuckDB 查询
 
-`marketdata data ...` 负责基于数据清单的目录刷新、标准层物化和 DuckDB 查询。该能力从 `cross-sectional-trees` 迁入平台仓库，cross 侧的 `cstree data ...` 仅保留兼容入口。
+`marketdata data ...` 负责基于数据清单的目录刷新、标准层物化和 DuckDB 查询。该能力已由平台仓库维护，cross 侧的 `cstree data ...` 是兼容入口。
 
 默认产物根目录解析顺序为：
 

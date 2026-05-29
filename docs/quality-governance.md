@@ -1,12 +1,11 @@
 # 质量治理与维护债务
 
 本页记录 Ruff / Pyright 覆盖、维护性指标、兼容层生命周期和架构边界的本地治理命令。
-这些检查的目标是让历史债务可见，并阻止新增债务继续扩大；它们不是要求一次性修完
-所有迁移遗留问题。
+这些检查用于暴露历史债务、阻止新增债务扩大，并指导分阶段收紧。
 
 ## 常规门禁
 
-常规门禁仍然是：
+常规门禁：
 
 ```bash
 uv run --extra dev python -m pytest
@@ -63,14 +62,16 @@ uv run --extra dev python scripts/dev/maintainability_metrics.py --check-baselin
 当前优先级：
 
 1. Ruff / Pyright：`config_utils.py`、`data_provider_contracts.py`、
-   `rqdata_cli_common.py`、`symbols.py` 已纳入覆盖，并由
+   `rebalance.py`、`rqdata_cli_common.py`、`symbols.py` 已纳入覆盖，并由
    `quality_debt.PROTECTED_INCLUDED_PATHS` 防止重新排除。
 1. Ruff：继续处理 `data_providers.py`、`data_warehouse.py`、
-   `rqdata_runtime.py` 这类边界模块，把目录级排除收窄成具体文件问题。
+   `release_tools` 和 `hk_assets`，把目录级排除收窄成具体文件问题。
 1. Pyright：优先处理 contracts、paths、manifest、registry、current assets 等边界模块。
 1. Pyright：provider contract 使用 `Protocol`、`TypedDict` 或 dataclass 稳定接口后再扩大覆盖。
 1. HK assets / HK depth / release workflows：先通过 maintainability metrics 锁定长函数，
    再按 plan/config、fetch、transform、validate、persist、manifest、report 拆分。
+
+当前覆盖数据和维护热点见 `docs/maintenance-audit.md`。
 
 ## 兼容层规则
 

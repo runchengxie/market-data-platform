@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -14,11 +15,15 @@ def get_rebalance_dates(dates: Iterable[pd.Timestamp], freq: str) -> list[pd.Tim
     if not freq or str(freq).upper() == "D":
         return sorted(pd.to_datetime(dates_list))
 
-    date_series = pd.to_datetime(pd.Series(dates_list, name="date"))
-    date_df = pd.DataFrame({"date": date_series})
-    date_df["period"] = date_df["date"].dt.to_period(freq)
-    rebalance_dates = date_df.groupby("period")["date"].max().sort_values().tolist()
-    return rebalance_dates
+    period_end_dates: dict[pd.Period, pd.Timestamp] = {}
+    valid_dates: list[pd.Timestamp] = []
+    for value in dates_list:
+        date = cast(pd.Timestamp, pd.Timestamp(value))
+        if not pd.isna(date):
+            valid_dates.append(date)
+    for date in sorted(valid_dates):
+        period_end_dates[date.to_period(freq)] = date
+    return list(period_end_dates.values())
 
 
 def estimate_rebalance_gap(

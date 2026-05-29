@@ -5,7 +5,7 @@
 当前定位：
 * 负责策略研究、特征工程（features）、模型构建、回测、持仓管理及报告生成。
 * 仅作为已发布 HK / CN 数据资产的下游只读调用方。
-* 不再保留 HK 数据生产、检查和发布入口；这些操作入口为 `marketdata rqdata hk-assets -- ...` 或更高层的 `marketdata rqdata refresh-hk-*`。
+* HK 数据生产、检查和发布入口位于本仓库：`marketdata rqdata hk-assets -- ...` 或更高层的 `marketdata rqdata refresh-hk-*`。
 
 环境配置：
 
@@ -13,7 +13,7 @@
 export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-这样配置可将策略的运行结果、缓存和报告输出保留在策略代码仓库本地，同时将市场数据输入路径指向共享的数据根目录。只有在希望把策略项目的默认输出也写入该数据平台根目录时，才需要将 `CSTREE_ARTIFACTS_ROOT` 或 `paths.artifacts_root` 指向平台根目录。
+这样配置可将策略的运行结果、缓存和报告输出保留在策略代码仓库本地，同时将市场数据输入路径指向共享的数据根目录。`CSTREE_ARTIFACTS_ROOT` 或 `paths.artifacts_root` 只用于需要把策略默认输出也写入平台根目录的场景。
 
 覆盖默认输出路径：
 
@@ -34,7 +34,7 @@ paths:
 当前定位：
 * 原始数据下载、数据质量监控（health checks）、日频数据聚合、数据对账（reconciliation）以及打包发布实现由 `market_data_platform.hk_depth` 承载。
 * 推荐统一入口为 `marketdata rqdata hk-depth -- ...`；安装本包后也会提供 `rqdata-hk-depth` 兼容命令。
-* `research-workspace` 不再追踪 `rqdata-hk-depth-snapshots` 子模块，也不再承诺 workspace 内支持 `rqdata_tick_data.*` 旧 Python import 路径。
+* `research-workspace` 已停止追踪 `rqdata-hk-depth-snapshots` 子模块；workspace 内不支持 `rqdata_tick_data.*` 旧 Python import 路径。
 
 推荐发布路径：
 

@@ -128,6 +128,7 @@ def _compute_group_cagr(
         elapsed_years = (current_date - anchor_date).days / 365.25
         if elapsed_years <= 0:
             continue
-        result.loc[row_index] = float(np.exp(np.log(current_value / anchor_value) / elapsed_years) - 1.0)
+        growth_rate = np.exp(np.log(current_value / anchor_value) / elapsed_years) - 1.0
+        result.loc[row_index] = float(growth_rate)
 
     return result
