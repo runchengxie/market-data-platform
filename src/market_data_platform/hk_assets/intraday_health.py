@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -69,6 +70,46 @@ _PRICE_RECONCILIATION_ISSUES = {
     "daily_low_mismatch",
     "daily_close_mismatch",
 }
+
+
+@dataclass(frozen=True)
+class IntradayHealthConfig:
+    input_specs: list[str]
+    parquet_paths: list[Path]
+    sample_limit: int
+    expected_bars_per_day: int
+    numeric_rtol: float
+    numeric_atol: float
+    daily_asset_dir: Path | None
+    intraday_adjust_type: str | None
+    daily_adjust_type: str | None
+    fail_on_severity: str
+    output_format: str
+    out_path: Path | None
+
+
+@dataclass
+class IntradayHealthScan:
+    rows_scanned: int
+    symbols_seen: set[str]
+    trade_date_min: pd.Timestamp | None
+    trade_date_max: pd.Timestamp | None
+    intraday_daily: pd.DataFrame
+    inferred_half_day_dates: set[str]
+    duplicate_timestamp_groups: int
+    duplicate_timestamp_rows: int
+    missing_bar_symbol_days: int
+    missing_bar_rows: int
+    unexpected_bar_count_symbol_days: int
+    off_schedule_bar_rows: int
+    negative_volume_rows: int
+    negative_amount_rows: int
+    bar_count_values: list[int]
+    sample_duplicate_rows: list[dict[str, object]]
+    sample_missing_symbol_days: list[dict[str, object]]
+    sample_negative_rows: list[dict[str, object]]
+    sample_unexpected_bar_count_symbol_days: list[dict[str, object]]
+    sample_off_schedule_rows: list[dict[str, object]]
 
 
 def _round_pct(numerator: int, denominator: int) -> float:
