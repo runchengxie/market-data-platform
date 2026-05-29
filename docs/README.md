@@ -2,12 +2,21 @@
 
 若需将本代码库作为 HK / CN 共享数据控制面使用，请由此开始阅读。
 
+## 新人阅读路线
+
+1. 先读仓库根目录 `README.md`，确认项目定位、核心概念和常用入口。
+1. 再读 `contracts.md`，理解共享数据根目录、资产键和 current contract。
+1. 如果需要维护 HK 数据，继续读 `hk-assets.md`。
+1. 如果需要配置 provider、运行 TuShare CN、备份或本地开发检查，读 `operations.md`。
+1. 如果要接入下游研究仓库，读 `integrations.md`。
+
 ## 文档导航
 
 | 主题内容 | 对应文档 |
 | --- | --- |
 | 共享路径、资产键和数据契约 | `contracts.md` |
 | HK 数据资产维护入口 | `hk-assets.md` |
+| Provider 凭证、CN/TuShare、备份和本地开发命令 | `operations.md` |
 | 数据目录、标准层与 DuckDB 查询 | `data-warehouse.md` |
 | 存量项目接入指南 | `integrations.md` |
 | 迁移记录与后续清理计划 | `migration-plan.md` |

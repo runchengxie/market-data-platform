@@ -8,8 +8,10 @@
 
 ```bash
 marketdata rqdata hk-assets -- --help
+marketdata rqdata hk-depth -- --help
 marketdata rqdata refresh-hk-current --help
 marketdata rqdata refresh-hk-intraday --help
+marketdata rqdata refresh-hk-depth --help
 marketdata rqdata refresh-hk-fundamentals --help
 ```
 
@@ -61,6 +63,24 @@ marketdata contract build \
   --artifacts-root "$DATA_PLATFORM_ROOT" \
   --target-date 20260526
 ```
+
+## 常用维护命令
+
+```bash
+marketdata migration status
+
+marketdata rqdata hk-depth -- health --input <raw-depth-dir>
+marketdata rqdata hk-depth -- aggregate-daily --input <raw-depth-dir> --output <daily.parquet>
+
+marketdata rqdata hk-assets -- mirror-hk-daily <原 cstree rqdata 参数>
+marketdata rqdata hk-assets -- build-hk-daily-clean-layer <原 cstree rqdata 参数>
+
+marketdata rqdata inspect-hk-current \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --target-date 20260526
+```
+
+`marketdata rqdata hk-depth -- ...` 和 `marketdata rqdata refresh-hk-depth` 使用平台内 `market_data_platform.hk_depth` 实现；安装本包后也会提供兼容命令 `rqdata-hk-depth` 和 `rqdata-tick`。`marketdata rqdata hk-assets -- ...` 使用平台内 `market_data_platform.hk_assets` 实现；安装本包后也会提供 `rqdata-hk-assets` 命令。
 
 ## Intraday
 
