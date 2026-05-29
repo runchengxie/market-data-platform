@@ -60,6 +60,13 @@ EXPECTED_SURFACES: tuple[CompatibilitySurface, ...] = (
     CompatibilitySurface("rqdata-hk-depth / rqdata-tick", ("rqdata-hk-depth", "rqdata-tick")),
     CompatibilitySurface("rqdata-hk-assets", ("rqdata-hk-assets",)),
     CompatibilitySurface("HK release presets", ("configs/presets/release",)),
+    CompatibilitySurface("cstree data ...", ("cstree data",)),
+    CompatibilitySurface("cstree universe ...", ("cstree universe",)),
+    CompatibilitySurface("cstree backup-data", ("cstree backup-data",)),
+    CompatibilitySurface(
+        "python -m cstree.research.hk_intraday_download",
+        ("python -m cstree.research.hk_intraday_download",),
+    ),
 )
 
 

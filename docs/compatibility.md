@@ -15,6 +15,10 @@
 | `rqdata-hk-depth` / `rqdata-tick` | HK depth 旧 console script 入口 | 新脚本可能绕过统一 `marketdata` CLI | `marketdata rqdata hk-depth -- ...` | 下游任务统一改用 `marketdata rqdata hk-depth -- ...` 后删除旧别名 | retained; downstream usage unknown | `scripts/dev/compatibility_governance.py --check`; usage counts in `docs/maintenance-audit.md` |
 | `rqdata-hk-assets` | HK assets 旧 console script 入口 | 新脚本可能绕过统一 `marketdata` CLI | `marketdata rqdata hk-assets -- ...` | 下游任务统一改用 `marketdata rqdata hk-assets -- ...` 后删除旧别名 | retained; downstream usage unknown | `scripts/dev/compatibility_governance.py --check`; console smoke test in `tests/test_hk_depth.py` |
 | HK release presets | 历史发布包复现，当前位于 `configs/presets/release/*.yml` | 历史 snapshot 名称仍需维护清理 | 当前发布 preset 与归档清单 | 定期归档过期 preset，只保留仍需复现或发布的配置 | retained; periodic review required | `scripts/dev/compatibility_governance.py --check`; usage counts in `docs/maintenance-audit.md` |
+| `cstree data ...` | 下游研究仓库保留的标准层 catalog/materialize/query 兼容入口 | 用户可能继续误以为标准层生成归属研究仓库 | `marketdata data ...` | 下游脚本统一改用 `marketdata data ...` 后删除 wrapper | retained downstream wrapper | `cross-sectional-trees/scripts/dev/data_ops_boundary.py --check`; wrapper smoke in `cross-sectional-trees/tests/test_data_warehouse.py` |
+| `cstree universe ...` | 下游研究仓库保留的 HK universe asset builder 兼容入口 | 用户可能继续在研究仓库维护 platform-owned universe 资产 | `marketdata rqdata hk-assets -- ...` 或平台 HK universe builder 模块 | 下游脚本统一改用平台入口后删除 wrapper | retained downstream wrapper | `cross-sectional-trees/scripts/dev/data_ops_boundary.py --check`; wrapper smoke in `cross-sectional-trees/tests/test_universe_tools.py` |
+| `cstree backup-data` | 下游研究仓库保留的本地 snapshot 兼容入口 | 名称容易和平台数据资产备份混淆 | `marketdata backup-data` | 下游脚本统一改用 `marketdata backup-data` 后删除 wrapper 或改名为 research snapshot helper | retained downstream wrapper | `cross-sectional-trees/scripts/dev/data_ops_boundary.py --check`; wrapper smoke in `cross-sectional-trees/tests/test_backup_data.py` |
+| `python -m cstree.research.hk_intraday_download` | 下游研究仓库保留的旧 HK intraday 下载模块路径 | 用户可能绕过 `marketdata rqdata refresh-hk-intraday` | `marketdata rqdata refresh-hk-intraday` | 下游脚本统一改用平台入口后删除 wrapper | retained downstream wrapper | `cross-sectional-trees/scripts/dev/data_ops_boundary.py --check`; wrapper smoke in `cross-sectional-trees/tests/test_hk_intraday_download.py` |
 
 ## 维护规则
 
@@ -23,6 +27,8 @@
 1. 新增兼容层时必须写入本表，说明用途和清理条件。
 1. 迁移类命令不应继续承载新的业务能力；新能力应进入平台原生工作流。
 1. 删除兼容项前先做 repo-local `rg` 审计，并确认下游脚本已经切换。
+1. 下游 `cross-sectional-trees` wrapper 只用于兼容，不能承载新的下载、健康检查、
+   current refresh、registry 或数据资产发布实现。
 
 ## 静态检查债务
 
