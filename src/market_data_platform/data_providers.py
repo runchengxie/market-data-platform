@@ -477,17 +477,31 @@ def _resolve_local_path(path_text: object, *, label: str) -> Path | None:
     return path
 
 
+def _provider_local_cfg(data_cfg: Mapping | None, provider: str | None = None) -> Mapping | None:
+    if not isinstance(data_cfg, Mapping):
+        return None
+    selected = str(provider or resolve_provider(data_cfg) or "").strip().lower()
+    provider_cfg = data_cfg.get(selected) if selected else None
+    return provider_cfg if isinstance(provider_cfg, Mapping) else None
+
+
 def _resolve_local_daily_asset_dir(data_cfg: Mapping | None) -> Path | None:
     if not isinstance(data_cfg, Mapping):
         return None
-    rq_cfg = data_cfg.get("rqdata")
+    provider = resolve_provider(data_cfg)
+    provider_cfg = _provider_local_cfg(data_cfg, provider)
     candidates = []
-    if isinstance(rq_cfg, Mapping):
+    if isinstance(provider_cfg, Mapping):
+        candidates.extend([provider_cfg.get("daily_asset_dir"), provider_cfg.get("asset_dir")])
+    # Backward-compatible RQData fallback for older configs/tests.
+    rq_cfg = data_cfg.get("rqdata")
+    if provider == "rqdata" and isinstance(rq_cfg, Mapping) and rq_cfg is not provider_cfg:
         candidates.extend([rq_cfg.get("daily_asset_dir"), rq_cfg.get("asset_dir")])
     candidates.extend([data_cfg.get("daily_asset_dir"), data_cfg.get("asset_dir")])
+    label = f"Local {str(provider or 'provider').upper()} daily asset path"
     for candidate in candidates:
         root = (
-            _resolve_local_path(candidate, label="Local RQData daily asset path")
+            _resolve_local_path(candidate, label=label)
             if candidate
             else None
         )
@@ -497,21 +511,27 @@ def _resolve_local_daily_asset_dir(data_cfg: Mapping | None) -> Path | None:
             return root
         if root.name == "data" and root.is_dir():
             return root.parent
-        raise SystemExit(f"Local RQData daily asset directory is missing data/: {root}")
+        raise SystemExit(f"{label} is missing data/: {root}")
     return None
 
 
 def _resolve_local_instruments_file(data_cfg: Mapping | None) -> Path | None:
     if not isinstance(data_cfg, Mapping):
         return None
-    rq_cfg = data_cfg.get("rqdata")
+    provider = resolve_provider(data_cfg)
+    provider_cfg = _provider_local_cfg(data_cfg, provider)
     candidates = []
-    if isinstance(rq_cfg, Mapping):
+    if isinstance(provider_cfg, Mapping):
+        candidates.extend([provider_cfg.get("instruments_file"), provider_cfg.get("basic_file")])
+    # Backward-compatible RQData fallback for older configs/tests.
+    rq_cfg = data_cfg.get("rqdata")
+    if provider == "rqdata" and isinstance(rq_cfg, Mapping) and rq_cfg is not provider_cfg:
         candidates.extend([rq_cfg.get("instruments_file"), rq_cfg.get("basic_file")])
     candidates.extend([data_cfg.get("instruments_file"), data_cfg.get("basic_file")])
+    label = f"Local {str(provider or 'provider').upper()} instruments file"
     for candidate in candidates:
         resolved = (
-            _resolve_local_path(candidate, label="Local RQData instruments file")
+            _resolve_local_path(candidate, label=label)
             if candidate
             else None
         )
@@ -817,8 +837,9 @@ def _fetch_daily_from_provider(
         return local_frame
     if provider != "rqdata":
         raise ValueError(
-            f"Unsupported data provider '{provider}'. "
-            "This project currently supports only provider='rqdata'."
+            f"Unsupported online data provider '{provider}'. "
+            "Configure provider-local platform assets (for example data.tushare.daily_asset_dir) "
+            "or use provider='rqdata' for online reads."
         )
     df = _fetch_daily_rqdata(market, symbol, start_date, end_date, client, data_cfg)
     if df is None or df.empty:
@@ -1009,10 +1030,20 @@ def load_basic(
             )
         )
 
+    local_basic = _load_basic_from_local_asset(market, symbols, data_cfg)
+    if local_basic is not None:
+        if local_basic is None or local_basic.empty:
+            return local_basic
+        # Ensure buffers are writable before parquet serialization.
+        local_basic = local_basic.copy(deep=True)
+        write_parquet_cache(local_basic, cache_file)
+        return local_basic
+
     if provider != "rqdata":
         raise ValueError(
-            f"Unsupported data provider '{provider}'. "
-            "This project currently supports only provider='rqdata'."
+            f"Unsupported online data provider '{provider}'. "
+            "Configure provider-local platform assets (for example data.tushare.instruments_file) "
+            "or use provider='rqdata' for online reads."
         )
     df_basic = _load_basic_rqdata(market, symbols, client, data_cfg)
 
