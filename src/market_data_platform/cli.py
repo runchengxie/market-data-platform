@@ -50,6 +50,10 @@ from market_data_platform.providers.tushare_a_share import (
 from market_data_platform.providers.tushare_a_share import (
     verify_tushare_tokens,
 )
+from market_data_platform.providers.tushare_a_share_clean import (
+    build_a_share_daily_clean as build_tushare_a_share_daily_clean,
+    validate_a_share_daily_clean as validate_tushare_a_share_daily_clean,
+)
 from market_data_platform.registry import (
     render_combined_dataset_registry_csv,
     write_combined_dataset_registry,
@@ -787,6 +791,28 @@ def _handle_tushare(args: argparse.Namespace) -> int:
             exchange=args.exchange,
             token_env=args.token_env,
         )
+    elif args.tushare_command == "build-a-share-daily-clean":
+        summary = build_tushare_a_share_daily_clean(
+            daily_dir=args.daily_dir,
+            adj_factor_dir=args.adj_factor_dir,
+            daily_basic_dir=args.daily_basic_dir,
+            limit_status_dir=args.limit_status_dir,
+            suspend_dir=args.suspend_dir,
+            instruments_file=args.instruments_file,
+            out_dir=args.out_dir,
+            min_rows=args.min_rows,
+            min_symbols=args.min_symbols,
+        )
+    elif args.tushare_command == "validate-a-share-daily-clean":
+        summary = validate_tushare_a_share_daily_clean(
+            daily_clean_dir=args.daily_clean_dir,
+            min_rows=args.min_rows,
+            min_symbols=args.min_symbols,
+            require_valuation=args.require_valuation,
+            require_limit_status=args.require_limit_status,
+        )
+        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if summary["status"] == "passed" else 1
     else:
         commands = {
             "mirror-a-share-daily": mirror_tushare_a_share_daily,

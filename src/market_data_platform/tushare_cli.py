@@ -81,3 +81,27 @@ def add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
         command="mirror-a-share-limit-status",
         description="Mirror A-share daily limit prices into the limit_status asset.",
     )
+
+    clean = tushare_subparsers.add_parser(
+        "build-a-share-daily-clean",
+        help="Build the TuShare A 股 daily_clean asset from raw daily and optional overlays.",
+    )
+    clean.add_argument("--daily-dir", required=True)
+    clean.add_argument("--out-dir", required=True)
+    clean.add_argument("--adj-factor-dir")
+    clean.add_argument("--daily-basic-dir")
+    clean.add_argument("--limit-status-dir")
+    clean.add_argument("--suspend-dir")
+    clean.add_argument("--instruments-file")
+    clean.add_argument("--min-rows", type=int, default=1)
+    clean.add_argument("--min-symbols", type=int, default=1)
+
+    validate = tushare_subparsers.add_parser(
+        "validate-a-share-daily-clean",
+        help="Run quality gates for a TuShare A 股 daily_clean asset.",
+    )
+    validate.add_argument("--daily-clean-dir", required=True)
+    validate.add_argument("--min-rows", type=int, default=1)
+    validate.add_argument("--min-symbols", type=int, default=1)
+    validate.add_argument("--require-valuation", action="store_true")
+    validate.add_argument("--require-limit-status", action="store_true")
