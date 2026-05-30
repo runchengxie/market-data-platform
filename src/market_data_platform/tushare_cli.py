@@ -27,7 +27,7 @@ def add_tushare_date_mirror_parser(
 
 
 def add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
-    parser = subparsers.add_parser("tushare", help="TuShare CN mirror/export helpers.")
+    parser = subparsers.add_parser("tushare", help="TuShare A-share mirror/export helpers.")
     tushare_subparsers = parser.add_subparsers(dest="tushare_command", required=True)
 
     verify = tushare_subparsers.add_parser(
@@ -42,7 +42,7 @@ def add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
     )
 
     instruments = tushare_subparsers.add_parser(
-        "export-cn-instruments",
+        "export-a-share-instruments",
         help="Export A-share instrument master from stock_basic.",
     )
     instruments.add_argument("--out", required=True)
@@ -52,8 +52,8 @@ def add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
     add_token_env_argument(instruments)
 
     trade_cal = tushare_subparsers.add_parser(
-        "mirror-cn-trade-cal",
-        help="Mirror the CN trading calendar from trade_cal.",
+        "mirror-a-share-trade-cal",
+        help="Mirror the A-share trading calendar from trade_cal.",
     )
     trade_cal.add_argument("--out", required=True)
     trade_cal.add_argument("--start-date", required=True)
@@ -63,26 +63,21 @@ def add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
 
     add_tushare_date_mirror_parser(
         tushare_subparsers,
-        command="mirror-cn-daily",
+        command="mirror-a-share-daily",
         description="Mirror unadjusted A-share daily bars, partitioned by trade date.",
     )
     add_tushare_date_mirror_parser(
         tushare_subparsers,
-        command="mirror-cn-adj-factor",
+        command="mirror-a-share-adj-factor",
         description="Mirror A-share adjustment factors, partitioned by trade date.",
     )
     add_tushare_date_mirror_parser(
         tushare_subparsers,
-        command="mirror-cn-daily-basic",
+        command="mirror-a-share-daily-basic",
         description="Mirror A-share daily valuation metrics, partitioned by trade date.",
     )
     add_tushare_date_mirror_parser(
         tushare_subparsers,
-        command="mirror-cn-stk-limit",
-        description="Mirror A-share daily limit prices from stk_limit.",
-    )
-    add_tushare_date_mirror_parser(
-        tushare_subparsers,
-        command="mirror-cn-limit-status",
-        description="Alias for mirror-cn-stk-limit using the limit_status asset key.",
+        command="mirror-a-share-limit-status",
+        description="Mirror A-share daily limit prices into the limit_status asset.",
     )

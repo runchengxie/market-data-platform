@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-SUPPORTED_MARKETS = {"hk", "cn"}
+SUPPORTED_MARKETS = {"hk", "a_share"}
 
 
 @dataclass(frozen=True)
@@ -23,9 +23,9 @@ MARKET_SPECS = {
         canonical_suffixes=(".HK",),
         rqdata_suffixes=(".XHKG",),
     ),
-    "cn": MarketSpec(
-        market="cn",
-        provider_market="cn",
+    "a_share": MarketSpec(
+        market="a_share",
+        provider_market="cn",  # RQData SDK market code.
         canonical_suffixes=(".SH", ".SZ"),
         rqdata_suffixes=(".XSHG", ".XSHE"),
     ),
@@ -81,7 +81,7 @@ def hk_to_rqdata_symbol(symbol: str) -> str:
     return f"{text}.XHKG"
 
 
-def _infer_cn_suffix(code: str) -> str | None:
+def _infer_a_share_suffix(code: str) -> str | None:
     if code.startswith(("5", "6", "9")):
         return ".XSHG"
     if code.startswith(("0", "2", "3")):
@@ -89,7 +89,7 @@ def _infer_cn_suffix(code: str) -> str | None:
     return None
 
 
-def cn_to_rqdata_symbol(symbol: str) -> str:
+def a_share_to_rqdata_symbol(symbol: str) -> str:
     text = str(symbol or "").strip().upper()
     if not text:
         return text
@@ -100,7 +100,7 @@ def cn_to_rqdata_symbol(symbol: str) -> str:
     if text.endswith(".SZ"):
         return f"{text[:-3].zfill(6)}.XSHE"
     if text.isdigit():
-        suffix = _infer_cn_suffix(text.zfill(6))
+        suffix = _infer_a_share_suffix(text.zfill(6))
         if suffix is not None:
             return f"{text.zfill(6)}{suffix}"
     return text
@@ -110,6 +110,6 @@ def to_rqdata_symbol(market: str, symbol: str) -> str:
     market = require_supported_market(market)
     if market == "hk":
         return hk_to_rqdata_symbol(symbol)
-    if market == "cn":
-        return cn_to_rqdata_symbol(symbol)
+    if market == "a_share":
+        return a_share_to_rqdata_symbol(symbol)
     return str(symbol or "").strip()

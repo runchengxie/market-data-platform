@@ -347,9 +347,9 @@ PIPELINE_ALIASES: Mapping[str, str] = {
     "hk": "hk.yml",
     "hk.yml": "hk.yml",
     "hk.yaml": "hk.yml",
-    "cn": "cn.yml",
-    "cn.yml": "cn.yml",
-    "cn.yaml": "cn.yml",
+    "a_share": "a_share.yml",
+    "a_share.yml": "a_share.yml",
+    "a_share.yaml": "a_share.yml",
 }
 
 

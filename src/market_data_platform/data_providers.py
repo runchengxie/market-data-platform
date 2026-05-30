@@ -67,7 +67,7 @@ DEFAULT_RQDATA_HK_FUNDAMENTAL_FIELDS = {
 }
 
 DEFAULT_COLUMN_MAPS = {
-    "cn": {
+    "a_share": {
         "trade_date": "trade_date",
         "symbol": "symbol",
         "close": "close",

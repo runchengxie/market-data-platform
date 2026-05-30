@@ -48,24 +48,24 @@ marketdata tushare verify-token
 常用导出和镜像命令：
 
 ```bash
-marketdata tushare export-cn-instruments \
-  --out "$DATA_PLATFORM_ROOT/assets/tushare/cn/instruments/cn_all_instruments_latest.parquet"
+marketdata tushare export-a-share-instruments \
+  --out "$DATA_PLATFORM_ROOT/assets/tushare/a_share/instruments/a_share_all_instruments_latest.parquet"
 
-marketdata tushare mirror-cn-trade-cal \
+marketdata tushare mirror-a-share-trade-cal \
   --start-date 20260101 --end-date 20260526 \
-  --out "$DATA_PLATFORM_ROOT/assets/tushare/cn/trade_cal/cn_trade_cal_latest.parquet"
+  --out "$DATA_PLATFORM_ROOT/assets/tushare/a_share/trade_cal/a_share_trade_cal_latest.parquet"
 
-marketdata tushare mirror-cn-daily \
+marketdata tushare mirror-a-share-daily \
   --start-date 20260101 --end-date 20260526 \
-  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/cn/daily/cn_all_20260101_20260526_daily"
+  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/daily/a_share_all_20260101_20260526_daily"
 
-marketdata tushare mirror-cn-adj-factor \
+marketdata tushare mirror-a-share-adj-factor \
   --start-date 20260101 --end-date 20260526 \
-  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/cn/adj_factor/cn_all_20260101_20260526_adj_factor"
+  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/adj_factor/a_share_all_20260101_20260526_adj_factor"
 
-marketdata tushare mirror-cn-daily-basic \
+marketdata tushare mirror-a-share-daily-basic \
   --start-date 20260101 --end-date 20260526 \
-  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/cn/daily_basic/cn_all_20260101_20260526_daily_basic"
+  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/daily_basic/a_share_all_20260101_20260526_daily_basic"
 ```
 
 日频类 TuShare 镜像按开放交易日请求全市场，并写入：
@@ -77,11 +77,11 @@ data/trade_date=YYYYMMDD/part.parquet
 完成校验并将 `*_latest` alias 指向采用的 snapshot 后，发布当前中国大陆市场 provider：
 
 ```bash
-marketdata contract build --market cn --provider tushare \
+marketdata contract build --market a_share --provider tushare \
   --artifacts-root "$DATA_PLATFORM_ROOT" --target-date 20260526
 ```
 
-`marketdata tushare mirror-cn-stk-limit` 可镜像 `stk_limit` 接口形成 `limit_status` raw 资产；`mirror-cn-limit-status` 是同一操作的兼容别名。当前 MVP 范围包含 raw layer 采集和 contract 发布入口，clean layer、修复、质量门禁与发布打包仍需后续补齐。
+`marketdata tushare mirror-a-share-limit-status` 可镜像 `stk_limit` 接口形成 `limit_status` raw 资产。当前 MVP 范围包含 raw layer 采集和 contract 发布入口，clean layer、修复、质量门禁与发布打包仍需后续补齐。
 
 ## 中国香港市场 current refresh
 

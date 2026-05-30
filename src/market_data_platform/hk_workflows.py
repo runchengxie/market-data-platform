@@ -435,9 +435,9 @@ def rebuild_hk_current_contract(
     write_current_contract(output, payload)
 
     contracts: list[dict[str, Any]] = [payload]
-    cn_contract = current_contract_path(root, market="cn")
-    if cn_contract.exists():
-        loaded = json.loads(cn_contract.read_text(encoding="utf-8"))
+    a_share_contract = current_contract_path(root, market="a_share")
+    if a_share_contract.exists():
+        loaded = json.loads(a_share_contract.read_text(encoding="utf-8"))
         if isinstance(loaded, dict):
             contracts.append(loaded)
     registry_output = dataset_registry_path(root)

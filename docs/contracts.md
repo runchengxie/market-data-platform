@@ -80,25 +80,25 @@ marketdata contract build \
 | `universe_symbols` | `assets/universe/hk_all_full_symbols.txt` |
 | `universe_meta` | `assets/universe/hk_all_full_by_date.meta.yml` |
 
-中国大陆市场使用同一套 asset key 语义，但路径落在 `assets/rqdata/cn/...`，并额外预留
+中国大陆市场使用同一套 asset key 语义，但路径落在 `assets/rqdata/a_share/...`，并额外预留
 `st_flags`、`suspend`、`limit_status`、`index_components`、`industry_citic`、
 `industry_sw`、`northbound` 等 A 股数据资产键。
 
 中国大陆市场 contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此模式下
-`cn_current.json` 的 `contract.provider` 为 `tushare`，当前支持的路径为：
+`a_share_current.json` 的 `contract.provider` 为 `tushare`，当前支持的路径为：
 
 | 资产键名 (Asset key) | TuShare 中国大陆市场默认路径 |
 | --- | --- |
-| `instruments` | `assets/tushare/cn/instruments/cn_all_instruments_latest.parquet` |
-| `trade_cal` | `assets/tushare/cn/trade_cal/cn_trade_cal_latest.parquet` |
-| `daily` | `assets/tushare/cn/daily/cn_all_daily_latest` |
-| `adj_factor` | `assets/tushare/cn/adj_factor/cn_all_adj_factor_latest` |
-| `daily_basic` | `assets/tushare/cn/daily_basic/cn_all_daily_basic_latest` |
-| `limit_status` | `assets/tushare/cn/limit_status/cn_limit_status_latest` |
-| `daily_clean` | `assets/tushare/cn/daily/cn_all_daily_clean_latest` |
+| `instruments` | `assets/tushare/a_share/instruments/a_share_all_instruments_latest.parquet` |
+| `trade_cal` | `assets/tushare/a_share/trade_cal/a_share_trade_cal_latest.parquet` |
+| `daily` | `assets/tushare/a_share/daily/a_share_all_daily_latest` |
+| `adj_factor` | `assets/tushare/a_share/adj_factor/a_share_all_adj_factor_latest` |
+| `daily_basic` | `assets/tushare/a_share/daily_basic/a_share_all_daily_basic_latest` |
+| `limit_status` | `assets/tushare/a_share/limit_status/a_share_limit_status_latest` |
+| `daily_clean` | `assets/tushare/a_share/daily/a_share_all_daily_clean_latest` |
 
 不传 `--provider` 的中国大陆市场 contract 继续使用原有 `rqdata` 布局。单个
-`cn_current.json` 只表示当前采纳的 provider，不汇总多个 provider 的 raw 快照。
+`a_share_current.json` 只表示当前采纳的 provider，不汇总多个 provider 的 raw 快照。
 
 ## 数据集注册表 (Dataset Registry)
 

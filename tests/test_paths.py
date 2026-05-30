@@ -57,49 +57,61 @@ def test_shared_paths_resolve_from_explicit_root(tmp_path):
     assert len(assets) == 22
 
 
-def test_cn_paths_and_contract_use_market_specific_layout(tmp_path):
+def test_a_share_paths_and_contract_use_market_specific_layout(tmp_path):
     root = tmp_path / "market-data"
 
     assert (
-        current_contract_path(root, market="cn")
-        == root.resolve() / "metadata" / "current_assets" / "cn_current.json"
+        current_contract_path(root, market="a_share")
+        == root.resolve() / "metadata" / "current_assets" / "a_share_current.json"
     )
 
-    assets = candidate_asset_paths(root, market="cn")
+    assets = candidate_asset_paths(root, market="a_share")
     assert (
         assets["daily_clean"]
-        == root.resolve() / "assets" / "rqdata" / "cn" / "daily" / "cn_all_daily_clean_latest"
+        == root.resolve()
+        / "assets"
+        / "rqdata"
+        / "a_share"
+        / "daily"
+        / "a_share_all_daily_clean_latest"
     )
     assert (
         assets["instruments"]
         == root.resolve()
         / "assets"
         / "rqdata"
-        / "cn"
+        / "a_share"
         / "instruments"
-        / "cn_all_instruments_latest.parquet"
+        / "a_share_all_instruments_latest.parquet"
     )
-    assert assets["st_flags"].name == "cn_st_flags_latest"
-    assert assets["limit_status"].name == "cn_limit_status_latest"
+    assert assets["st_flags"].name == "a_share_st_flags_latest"
+    assert assets["limit_status"].name == "a_share_limit_status_latest"
 
-    contract = build_current_contract(root, market="cn", target_date="20260522")
-    assert contract["contract"]["name"] == "cn_current"
-    assert contract["contract"]["market"] == "cn"
-    assert contract["contract"]["contract_path"].endswith("metadata/current_assets/cn_current.json")
+    contract = build_current_contract(root, market="a_share", target_date="20260522")
+    assert contract["contract"]["name"] == "a_share_current"
+    assert contract["contract"]["market"] == "a_share"
+    assert contract["contract"]["contract_path"].endswith(
+        "metadata/current_assets/a_share_current.json"
+    )
     assert "daily_clean" in contract["assets"]
 
 
-def test_tushare_cn_paths_and_registry_source_are_provider_specific(tmp_path):
+def test_tushare_a_share_paths_and_registry_source_are_provider_specific(tmp_path):
     root = tmp_path / "market-data"
-    assets = candidate_asset_paths(root, market="cn", provider="tushare")
+    assets = candidate_asset_paths(root, market="a_share", provider="tushare")
     assert (
         assets["daily"]
-        == root.resolve() / "assets" / "tushare" / "cn" / "daily" / "cn_all_daily_latest"
+        == root.resolve()
+        / "assets"
+        / "tushare"
+        / "a_share"
+        / "daily"
+        / "a_share_all_daily_latest"
     )
-    assert assets["trade_cal"].name == "cn_trade_cal_latest.parquet"
+    assert assets["trade_cal"].name == "a_share_trade_cal_latest.parquet"
     assert "daily_basic" in assets
 
-    snapshot = root / "assets" / "tushare" / "cn" / "daily" / "cn_all_20260522_daily"
+    snapshot = root / "assets" / "tushare" / "a_share" / "daily" / "a_share_all_20260522_daily"
     snapshot.mkdir(parents=True)
     (snapshot / "manifest.yml").write_text(
         "\n".join(
@@ -122,20 +134,20 @@ def test_tushare_cn_paths_and_registry_source_are_provider_specific(tmp_path):
 
     contract = build_current_contract(
         root,
-        market="cn",
+        market="a_share",
         provider="tushare",
         target_date="20260522",
     )
     daily = next(
         row
         for row in build_dataset_registry_rows(contract)
-        if row["dataset_name"] == "cn_daily"
+        if row["dataset_name"] == "a_share_daily"
     )
     rows_by_name = {row["dataset_name"]: row for row in build_dataset_registry_rows(contract)}
     assert contract["contract"]["provider"] == "tushare"
     assert daily["source"] == "tushare"
-    assert rows_by_name["cn_instruments"]["source"] == "tushare"
-    assert rows_by_name["cn_limit_status"]["source"] == "tushare"
+    assert rows_by_name["a_share_instruments"]["source"] == "tushare"
+    assert rows_by_name["a_share_limit_status"]["source"] == "tushare"
 
 
 def test_build_current_contract_reads_tick_depth_manifest(tmp_path):
@@ -252,9 +264,9 @@ def test_current_contract_uses_query_date_as_as_of(tmp_path):
     assert financial_details["date_range"] == "as of 2026-05-22"
 
 
-def test_cn_dataset_registry_uses_contract_market(tmp_path):
+def test_a_share_dataset_registry_uses_contract_market(tmp_path):
     root = tmp_path / "market-data"
-    snapshot = root / "assets" / "rqdata" / "cn" / "daily" / "cn_all_20260522_daily"
+    snapshot = root / "assets" / "rqdata" / "a_share" / "daily" / "a_share_all_20260522_daily"
     snapshot.mkdir(parents=True)
     (snapshot / "manifest.yml").write_text(
         "\n".join(
@@ -271,35 +283,35 @@ def test_cn_dataset_registry_uses_contract_market(tmp_path):
         ),
         encoding="utf-8",
     )
-    alias = candidate_asset_paths(root, market="cn")["daily"]
+    alias = candidate_asset_paths(root, market="a_share")["daily"]
     alias.parent.mkdir(parents=True, exist_ok=True)
     alias.symlink_to(snapshot.name)
 
-    contract = build_current_contract(root, market="cn", target_date="20260522")
+    contract = build_current_contract(root, market="a_share", target_date="20260522")
     rows = build_dataset_registry_rows(contract)
     csv_text = render_dataset_registry_csv(contract)
 
-    daily = next(row for row in rows if row["dataset_name"] == "cn_daily")
-    assert daily["market"] == "cn"
+    daily = next(row for row in rows if row["dataset_name"] == "a_share_daily")
+    assert daily["market"] == "a_share"
     assert daily["version"] == "20260522"
     assert daily["records"] == "12"
-    assert "cn_current_contract" in csv_text
+    assert "a_share_current_contract" in csv_text
 
 
-def test_combined_dataset_registry_includes_hk_and_cn_contracts(tmp_path):
+def test_combined_dataset_registry_includes_hk_and_a_share_contracts(tmp_path):
     root = tmp_path / "market-data"
     hk_contract = build_current_contract(root, market="hk", target_date="20260522")
-    cn_contract = build_current_contract(root, market="cn", target_date="20260522")
+    a_share_contract = build_current_contract(root, market="a_share", target_date="20260522")
 
-    rows = build_combined_dataset_registry_rows([hk_contract, cn_contract])
-    csv_text = render_combined_dataset_registry_csv([hk_contract, cn_contract])
+    rows = build_combined_dataset_registry_rows([hk_contract, a_share_contract])
+    csv_text = render_combined_dataset_registry_csv([hk_contract, a_share_contract])
 
     dataset_names = {row["dataset_name"] for row in rows}
     assert "hk_current_contract" in dataset_names
-    assert "cn_current_contract" in dataset_names
+    assert "a_share_current_contract" in dataset_names
     assert "hk_daily" in dataset_names
-    assert "cn_daily" in dataset_names
-    assert "# Dataset Registry for current HK/CN research data assets." in csv_text
+    assert "a_share_daily" in dataset_names
+    assert "# Dataset Registry for current HK/A-share research data assets." in csv_text
 
 
 def test_hk_data_platform_imports_remain_compatible(tmp_path):
@@ -310,21 +322,21 @@ def test_hk_data_platform_imports_remain_compatible(tmp_path):
 
     root = tmp_path / "market-data"
 
-    assert legacy_paths.current_contract_path(root, market="cn") == current_contract_path(
+    assert legacy_paths.current_contract_path(root, market="a_share") == current_contract_path(
         root,
-        market="cn",
+        market="a_share",
     )
 
 
 def test_cli_registry_build_combines_existing_market_contracts(tmp_path):
     root = tmp_path / "market-data"
     hk_contract = build_current_contract(root, market="hk", target_date="20260522")
-    cn_contract = build_current_contract(root, market="cn", target_date="20260522")
+    a_share_contract = build_current_contract(root, market="a_share", target_date="20260522")
     write_current_contract(current_contract_path(root, market="hk"), hk_contract)
-    write_current_contract(current_contract_path(root, market="cn"), cn_contract)
+    write_current_contract(current_contract_path(root, market="a_share"), a_share_contract)
 
     assert main(["registry", "build", "--artifacts-root", str(root)]) == 0
 
     registry_text = dataset_registry_path(root).read_text(encoding="utf-8")
     assert "hk_current_contract" in registry_text
-    assert "cn_current_contract" in registry_text
+    assert "a_share_current_contract" in registry_text

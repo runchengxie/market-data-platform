@@ -1,4 +1,4 @@
-"""TuShare provider implementation for CN market assets."""
+"""TuShare provider implementation for A-share market assets."""
 
 from __future__ import annotations
 
@@ -132,7 +132,7 @@ def _prepare_frame(frame: Any) -> Any:
         df["symbol"] = df["ts_code"]
     for column in ("trade_date", "cal_date", "pretrade_date", "list_date", "delist_date"):
         _normalize_date_column(df, column)
-    df["platform_market"] = "cn"
+    df["platform_market"] = "a_share"
     return df
 
 
@@ -233,7 +233,7 @@ def verify_tushare_tokens(
     }
 
 
-def export_cn_instruments(
+def export_a_share_instruments(
     *,
     out: str | Path,
     list_statuses: Iterable[str] | None = None,
@@ -269,7 +269,7 @@ def export_cn_instruments(
     manifest = {
         "schema_version": "tushare.stock_basic.v1",
         "dataset": "instruments",
-        "market": "cn",
+        "market": "a_share",
         "provider": "tushare",
         "status": "completed",
         "output_dir": str(output),
@@ -280,7 +280,7 @@ def export_cn_instruments(
     return manifest
 
 
-def mirror_cn_trade_cal(
+def mirror_a_share_trade_cal(
     *,
     out: str | Path,
     start_date: str,
@@ -299,7 +299,7 @@ def mirror_cn_trade_cal(
     manifest = {
         "schema_version": "tushare.trade_cal.v1",
         "dataset": "trade_cal",
-        "market": "cn",
+        "market": "a_share",
         "provider": "tushare",
         "status": "completed",
         "output_dir": str(output),
@@ -322,7 +322,7 @@ def _open_trade_dates(client: Any, *, start_date: str, end_date: str) -> list[st
     return sorted({_validate_date(value) for value in values})
 
 
-def mirror_cn_trade_date_dataset(
+def mirror_a_share_trade_date_dataset(
     *,
     dataset: str,
     out_dir: str | Path,
@@ -334,7 +334,7 @@ def mirror_cn_trade_date_dataset(
     client: Any | None = None,
 ) -> dict[str, Any]:
     if dataset not in TRADE_DATE_APIS:
-        raise ValueError(f"Unsupported TuShare CN trade-date dataset: {dataset}")
+        raise ValueError(f"Unsupported TuShare A-share trade-date dataset: {dataset}")
     start = _validate_date(start_date)
     end = _validate_date(end_date)
     pro = client or get_tushare_client(token_env=token_env)
@@ -374,7 +374,7 @@ def mirror_cn_trade_date_dataset(
     manifest = {
         "schema_version": f"tushare.{api_name}.v1",
         "dataset": dataset,
-        "market": "cn",
+        "market": "a_share",
         "provider": "tushare",
         "status": "completed",
         "output_dir": str(output_dir),
@@ -402,17 +402,17 @@ def mirror_cn_trade_date_dataset(
     return manifest
 
 
-def mirror_cn_daily(**kwargs: Any) -> dict[str, Any]:
-    return mirror_cn_trade_date_dataset(dataset="daily", **kwargs)
+def mirror_a_share_daily(**kwargs: Any) -> dict[str, Any]:
+    return mirror_a_share_trade_date_dataset(dataset="daily", **kwargs)
 
 
-def mirror_cn_adj_factor(**kwargs: Any) -> dict[str, Any]:
-    return mirror_cn_trade_date_dataset(dataset="adj_factor", **kwargs)
+def mirror_a_share_adj_factor(**kwargs: Any) -> dict[str, Any]:
+    return mirror_a_share_trade_date_dataset(dataset="adj_factor", **kwargs)
 
 
-def mirror_cn_daily_basic(**kwargs: Any) -> dict[str, Any]:
-    return mirror_cn_trade_date_dataset(dataset="daily_basic", **kwargs)
+def mirror_a_share_daily_basic(**kwargs: Any) -> dict[str, Any]:
+    return mirror_a_share_trade_date_dataset(dataset="daily_basic", **kwargs)
 
 
-def mirror_cn_limit_status(**kwargs: Any) -> dict[str, Any]:
-    return mirror_cn_trade_date_dataset(dataset="limit_status", **kwargs)
+def mirror_a_share_limit_status(**kwargs: Any) -> dict[str, Any]:
+    return mirror_a_share_trade_date_dataset(dataset="limit_status", **kwargs)

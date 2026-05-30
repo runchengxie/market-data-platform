@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from market_data_platform import cli, hk_workflows, transitions
-from market_data_platform.providers import rqdata_cn, tushare_cn
+from market_data_platform.providers import rqdata_a_share, tushare_a_share
 
 
 def test_provider_modules_are_owned_by_provider_namespace():
-    assert rqdata_cn.normalize_cn_symbol("600000.XSHG") == "600000.SH"
-    assert tushare_cn.DEFAULT_TOKEN_ENV_KEYS == ("TUSHARE_TOKEN", "TUSHARE_TOKEN_2")
+    assert rqdata_a_share.normalize_a_share_symbol("600000.XSHG") == "600000.SH"
+    assert tushare_a_share.DEFAULT_TOKEN_ENV_KEYS == ("TUSHARE_TOKEN", "TUSHARE_TOKEN_2")
 
 
 def test_hk_assets_transition_backend_has_been_retired():
@@ -126,8 +126,8 @@ def test_migration_status_reports_hk_assets_native(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
 
     assert {item["name"] for item in payload["native"]} >= {
-        "cn-tushare",
-        "cn-rqdata",
+        "a-share-tushare",
+        "a-share-rqdata",
         "hk-depth",
         "hk-assets",
     }

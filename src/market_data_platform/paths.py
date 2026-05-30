@@ -7,10 +7,10 @@ DATA_PLATFORM_ROOT_ENV = "DATA_PLATFORM_ROOT"
 HK_DATA_PLATFORM_ROOT_ENV = "HK_DATA_PLATFORM_ROOT"
 CSTREE_ARTIFACTS_ROOT_ENV = "CSTREE_ARTIFACTS_ROOT"
 
-SUPPORTED_MARKETS = {"hk", "cn"}
+SUPPORTED_MARKETS = {"hk", "a_share"}
 SUPPORTED_PROVIDERS_BY_MARKET = {
     "hk": {"rqdata"},
-    "cn": {"rqdata", "tushare"},
+    "a_share": {"rqdata", "tushare"},
 }
 
 
@@ -104,82 +104,88 @@ HK_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
     "universe_meta": ("assets", "universe", "hk_all_full_by_date.meta.yml"),
 }
 
-CN_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
-    "daily": ("assets", "rqdata", "cn", "daily", "cn_all_daily_latest"),
-    "daily_clean": ("assets", "rqdata", "cn", "daily", "cn_all_daily_clean_latest"),
-    "valuation": ("assets", "rqdata", "cn", "valuation", "cn_all_valuation_latest"),
+A_SHARE_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
+    "daily": ("assets", "rqdata", "a_share", "daily", "a_share_all_daily_latest"),
+    "daily_clean": ("assets", "rqdata", "a_share", "daily", "a_share_all_daily_clean_latest"),
+    "valuation": ("assets", "rqdata", "a_share", "valuation", "a_share_all_valuation_latest"),
     "instruments": (
         "assets",
         "rqdata",
-        "cn",
+        "a_share",
         "instruments",
-        "cn_all_instruments_latest.parquet",
+        "a_share_all_instruments_latest.parquet",
     ),
-    "pit": ("assets", "rqdata", "cn", "pit_financials", "cn_all_pit_financials_latest"),
-    "ex_factors": ("assets", "rqdata", "cn", "ex_factors", "cn_all_ex_factors_latest"),
-    "dividends": ("assets", "rqdata", "cn", "dividends", "cn_all_dividends_latest"),
-    "shares": ("assets", "rqdata", "cn", "shares", "cn_all_shares_latest"),
-    "industry": ("assets", "rqdata", "cn", "industry", "cn_industry_latest"),
-    "industry_citic": ("assets", "rqdata", "cn", "industry_citic", "cn_industry_citic_latest"),
-    "industry_sw": ("assets", "rqdata", "cn", "industry_sw", "cn_industry_sw_latest"),
-    "st_flags": ("assets", "rqdata", "cn", "st_flags", "cn_st_flags_latest"),
-    "suspend": ("assets", "rqdata", "cn", "suspend", "cn_suspend_latest"),
-    "limit_status": ("assets", "rqdata", "cn", "limit_status", "cn_limit_status_latest"),
+    "pit": ("assets", "rqdata", "a_share", "pit_financials", "a_share_all_pit_financials_latest"),
+    "ex_factors": ("assets", "rqdata", "a_share", "ex_factors", "a_share_all_ex_factors_latest"),
+    "dividends": ("assets", "rqdata", "a_share", "dividends", "a_share_all_dividends_latest"),
+    "shares": ("assets", "rqdata", "a_share", "shares", "a_share_all_shares_latest"),
+    "industry": ("assets", "rqdata", "a_share", "industry", "a_share_industry_latest"),
+    "industry_citic": (
+        "assets",
+        "rqdata",
+        "a_share",
+        "industry_citic",
+        "a_share_industry_citic_latest",
+    ),
+    "industry_sw": ("assets", "rqdata", "a_share", "industry_sw", "a_share_industry_sw_latest"),
+    "st_flags": ("assets", "rqdata", "a_share", "st_flags", "a_share_st_flags_latest"),
+    "suspend": ("assets", "rqdata", "a_share", "suspend", "a_share_suspend_latest"),
+    "limit_status": ("assets", "rqdata", "a_share", "limit_status", "a_share_limit_status_latest"),
     "index_components": (
         "assets",
         "rqdata",
-        "cn",
+        "a_share",
         "index_components",
-        "cn_index_components_latest",
+        "a_share_index_components_latest",
     ),
-    "northbound": ("assets", "rqdata", "cn", "northbound", "cn_northbound_latest"),
-    "universe_by_date": ("assets", "universe", "cn_all_full_by_date.csv"),
-    "universe_symbols": ("assets", "universe", "cn_all_full_symbols.txt"),
-    "universe_meta": ("assets", "universe", "cn_all_full_by_date.meta.yml"),
+    "northbound": ("assets", "rqdata", "a_share", "northbound", "a_share_northbound_latest"),
+    "universe_by_date": ("assets", "universe", "a_share_all_full_by_date.csv"),
+    "universe_symbols": ("assets", "universe", "a_share_all_full_symbols.txt"),
+    "universe_meta": ("assets", "universe", "a_share_all_full_by_date.meta.yml"),
 }
 
-TUSHARE_CN_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
+TUSHARE_A_SHARE_ASSET_PATH_SPECS: dict[str, tuple[str, ...]] = {
     "instruments": (
         "assets",
         "tushare",
-        "cn",
+        "a_share",
         "instruments",
-        "cn_all_instruments_latest.parquet",
+        "a_share_all_instruments_latest.parquet",
     ),
-    "trade_cal": ("assets", "tushare", "cn", "trade_cal", "cn_trade_cal_latest.parquet"),
-    "daily": ("assets", "tushare", "cn", "daily", "cn_all_daily_latest"),
+    "trade_cal": ("assets", "tushare", "a_share", "trade_cal", "a_share_trade_cal_latest.parquet"),
+    "daily": ("assets", "tushare", "a_share", "daily", "a_share_all_daily_latest"),
     "adj_factor": (
         "assets",
         "tushare",
-        "cn",
+        "a_share",
         "adj_factor",
-        "cn_all_adj_factor_latest",
+        "a_share_all_adj_factor_latest",
     ),
     "daily_basic": (
         "assets",
         "tushare",
-        "cn",
+        "a_share",
         "daily_basic",
-        "cn_all_daily_basic_latest",
+        "a_share_all_daily_basic_latest",
     ),
     "limit_status": (
         "assets",
         "tushare",
-        "cn",
+        "a_share",
         "limit_status",
-        "cn_limit_status_latest",
+        "a_share_limit_status_latest",
     ),
-    "daily_clean": ("assets", "tushare", "cn", "daily", "cn_all_daily_clean_latest"),
-    "universe_by_date": ("assets", "universe", "cn_all_full_by_date.csv"),
-    "universe_symbols": ("assets", "universe", "cn_all_full_symbols.txt"),
-    "universe_meta": ("assets", "universe", "cn_all_full_by_date.meta.yml"),
+    "daily_clean": ("assets", "tushare", "a_share", "daily", "a_share_all_daily_clean_latest"),
+    "universe_by_date": ("assets", "universe", "a_share_all_full_by_date.csv"),
+    "universe_symbols": ("assets", "universe", "a_share_all_full_symbols.txt"),
+    "universe_meta": ("assets", "universe", "a_share_all_full_by_date.meta.yml"),
 }
 
 ASSET_PATH_SPECS_BY_MARKET_PROVIDER: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     "hk": {"rqdata": HK_ASSET_PATH_SPECS},
-    "cn": {
-        "rqdata": CN_ASSET_PATH_SPECS,
-        "tushare": TUSHARE_CN_ASSET_PATH_SPECS,
+    "a_share": {
+        "rqdata": A_SHARE_ASSET_PATH_SPECS,
+        "tushare": TUSHARE_A_SHARE_ASSET_PATH_SPECS,
     },
 }
 

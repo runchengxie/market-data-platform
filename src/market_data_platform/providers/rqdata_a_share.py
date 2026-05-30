@@ -1,4 +1,4 @@
-"""RQData provider implementation for CN market assets."""
+"""RQData provider implementation for A-share market assets."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ DEFAULT_DAILY_FIELDS = (
     "volume",
     "total_turnover",
 )
+RQDATA_PROVIDER_A_SHARE_MARKET = "cn"  # RQData SDK market code.
 
 
 def _require_module(name: str, *, install_hint: str) -> Any:
@@ -26,7 +27,7 @@ def _require_module(name: str, *, install_hint: str) -> Any:
         raise RuntimeError(f"{name} is required for this command. {install_hint}") from exc
 
 
-def normalize_cn_symbol(symbol: object) -> str:
+def normalize_a_share_symbol(symbol: object) -> str:
     text = str(symbol or "").strip().upper()
     if not text:
         return ""
@@ -47,8 +48,8 @@ def normalize_cn_symbol(symbol: object) -> str:
     return text
 
 
-def to_rqdata_cn_symbol(symbol: object) -> str:
-    canonical = normalize_cn_symbol(symbol)
+def to_rqdata_a_share_symbol(symbol: object) -> str:
+    canonical = normalize_a_share_symbol(symbol)
     if canonical.endswith(".SH"):
         return f"{canonical[:-3]}.XSHG"
     if canonical.endswith(".SZ"):
@@ -70,7 +71,7 @@ def read_symbols_file(path: str | Path) -> list[str]:
     if input_path.suffix.lower() != ".csv":
         return [
             symbol
-            for symbol in map(normalize_cn_symbol, _read_text_symbols(input_path))
+            for symbol in map(normalize_a_share_symbol, _read_text_symbols(input_path))
             if symbol
         ]
 
@@ -82,7 +83,7 @@ def read_symbols_file(path: str | Path) -> list[str]:
         symbol_col = next((column for column in preferred if column in reader.fieldnames), None)
         if symbol_col is None:
             symbol_col = reader.fieldnames[0]
-        symbols = [normalize_cn_symbol(row.get(symbol_col)) for row in reader]
+        symbols = [normalize_a_share_symbol(row.get(symbol_col)) for row in reader]
     return [symbol for symbol in symbols if symbol]
 
 
@@ -100,11 +101,11 @@ def _prepare_instruments_frame(frame: Any) -> Any:
                 break
     if "order_book_id" in df.columns:
         df["order_book_id"] = df["order_book_id"].astype(str).str.strip().str.upper()
-        df["symbol"] = df["order_book_id"].map(normalize_cn_symbol)
+        df["symbol"] = df["order_book_id"].map(normalize_a_share_symbol)
     elif "symbol" in df.columns:
-        df["symbol"] = df["symbol"].map(normalize_cn_symbol)
-        df["order_book_id"] = df["symbol"].map(to_rqdata_cn_symbol)
-    df["market"] = "cn"
+        df["symbol"] = df["symbol"].map(normalize_a_share_symbol)
+        df["order_book_id"] = df["symbol"].map(to_rqdata_a_share_symbol)
+    df["market"] = "a_share"
     return df
 
 
@@ -116,7 +117,7 @@ def _write_frame(frame: Any, path: Path) -> None:
     frame.to_parquet(path, index=False)
 
 
-def export_cn_instruments(
+def export_a_share_instruments(
     *,
     out: str | Path,
     date: str | None = None,
@@ -124,7 +125,10 @@ def export_cn_instruments(
     symbols_out: str | Path | None = None,
 ) -> dict[str, Any]:
     rqdatac = _require_module("rqdatac", install_hint="Install and initialize rqdatac first.")
-    kwargs: dict[str, Any] = {"type": instrument_type, "market": "cn"}
+    kwargs: dict[str, Any] = {
+        "type": instrument_type,
+        "market": RQDATA_PROVIDER_A_SHARE_MARKET,
+    }
     if date:
         kwargs["date"] = date
     frame = rqdatac.all_instruments(**kwargs)
@@ -140,7 +144,7 @@ def export_cn_instruments(
 
     return {
         "dataset": "instruments",
-        "market": "cn",
+        "market": "a_share",
         "provider": "rqdata",
         "output": str(output),
         "symbols": len(symbols),
@@ -194,7 +198,7 @@ def _fetch_daily_frame(
         return rqdatac.get_price(order_book_id, start_date, end_date, **kwargs)
 
 
-def mirror_cn_daily(
+def mirror_a_share_daily(
     *,
     symbols_file: str | Path,
     out_dir: str | Path,
@@ -215,7 +219,7 @@ def mirror_cn_daily(
     skipped_symbols: list[str] = []
     rows = 0
     for symbol in symbols:
-        order_book_id = to_rqdata_cn_symbol(symbol)
+        order_book_id = to_rqdata_a_share_symbol(symbol)
         output_path = data_dir / f"{symbol}.parquet"
         if skip_existing and output_path.exists():
             skipped_symbols.append(symbol)
@@ -243,7 +247,7 @@ def mirror_cn_daily(
     )
     manifest = {
         "dataset": "daily",
-        "market": "cn",
+        "market": "a_share",
         "provider": "rqdata",
         "status": "completed",
         "output_dir": str(output_dir),

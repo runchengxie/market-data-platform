@@ -4,7 +4,7 @@
 
 本仓库负责把市场数据的采集、检查、发布和读取入口统一起来：定义数据契约、资产路径、注册表、健康巡检和发布工作流。大体量行情数据、缓存、报告和本地凭证不进入 Git。
 
-正文以“中国香港市场 / 港股”和“中国大陆市场 / A 股”描述业务范围。命令参数、目录名和文件名示例展示的是现有接口契约；公开接口或历史路径的命名调整应单独评估兼容影响。
+正文以“中国香港市场 / 港股”和“中国大陆市场 / A 股”描述业务范围。A 股相关命令使用 `a-share`，路径、配置和资产键使用 `a_share`。
 
 ## 这个项目解决什么问题
 
@@ -14,7 +14,7 @@
 
 - 定义资产键、共享目录结构和 current contract。
 - 维护中国香港市场 RQData 资产、港股 tick-depth，以及中国大陆市场 RQData / TuShare 基础采集入口。
-- 生成 `hk_current.json` / `cn_current.json` 和 `dataset_registry.csv`，让下游按契约读取确定的数据版本。
+- 生成 `hk_current.json` / `a_share_current.json` 和 `dataset_registry.csv`，让下游按契约读取确定的数据版本。
 - 提供数据目录、标准层物化、DuckDB 查询、本地快照备份和质量治理脚本。
 
 下游系统不需要了解平台内部如何采集和清洗数据，只需要读取已发布的 current contract、manifest 和标准化数据目录。
@@ -60,9 +60,9 @@ marketdata registry build --artifacts-root "$DATA_PLATFORM_ROOT"
   assets/
     rqdata/
       hk/
-      cn/
+      a_share/
     tushare/
-      cn/
+      a_share/
     universe/
   metadata/
     current_assets/

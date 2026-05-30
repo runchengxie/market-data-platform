@@ -17,7 +17,7 @@ def normalize_symbol_for_market(value: object, *, market: str | None) -> str:
         return ""
     market_text = str(market or "").strip().lower()
     upper = text.upper()
-    if market_text == "cn":
+    if market_text == "a_share":
         if upper.endswith(".XSHG"):
             return f"{upper[:-5].zfill(6)}.SH"
         if upper.endswith(".XSHE"):

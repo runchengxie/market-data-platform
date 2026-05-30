@@ -47,10 +47,6 @@ class UsageAudit:
 EXPECTED_SURFACES: tuple[CompatibilitySurface, ...] = (
     CompatibilitySurface("hkdata CLI", ("hkdata",)),
     CompatibilitySurface("hk_data_platform.*", ("hk_data_platform",)),
-    CompatibilitySurface(
-        "market_data_platform.rqdata_cn / tushare_cn",
-        ("market_data_platform.rqdata_cn", "market_data_platform.tushare_cn"),
-    ),
     CompatibilitySurface("marketdata migration status", ("migration status",)),
     CompatibilitySurface("marketdata migration sync-hk-links", ("sync-hk-links",)),
     CompatibilitySurface(

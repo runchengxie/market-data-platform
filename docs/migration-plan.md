@@ -55,7 +55,7 @@
 下游研究或交易系统未来应仅需依赖以下内容：
 
 - 数据产物根目录
-- `hk_current.json` / `cn_current.json` 文件
+- `hk_current.json` / `a_share_current.json` 文件
 - 已解析的资产路径 (resolved asset paths)
 - 数据资产清单 (asset manifests)
 

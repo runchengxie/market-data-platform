@@ -133,6 +133,8 @@ def _registry_date_range(entry: Mapping[str, Any]) -> str:
 
 
 def _market_label(market: str) -> str:
+    if market == "a_share":
+        return "A-share"
     return market.upper()
 
 

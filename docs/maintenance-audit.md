@@ -25,7 +25,7 @@
 | `src/market_data_platform/hk_depth/*` | active / needs-refactor | 业务能力已归属平台；大模块继续拆分并逐步恢复 Pyright |
 | `src/market_data_platform/hk_assets/*` | active / needs-refactor | 业务能力已归属平台；当前是最大维护热点 |
 | `src/market_data_platform/release_tools/*` | active / needs-refactor | 发布编排活跃；优先拆分 planning、execution、reporting |
-| `src/hk_data_platform/*`, `src/market_data_platform/rqdata_cn.py`, `src/market_data_platform/tushare_cn.py` | compatibility | 保留 re-export；删除前需 repo-local 和下游使用审计 |
+| `src/hk_data_platform/*` | compatibility | 旧包名兼容层；删除前需 repo-local 和下游使用审计 |
 | `marketdata migration status`, `sync-hk-links`, `import-cross-artifacts` | migration-only | 保留当前行为；不承载新业务能力 |
 | `scripts/dev/*` | active governance | CI 使用的治理脚本，变更需配套测试 |
 | `configs/presets/release/*.yml` | archival / retained | 保留历史发布复现能力；定期归档不再复现的 preset |
@@ -104,7 +104,6 @@
 | --- | ---: | ---: | ---: | ---: | --- |
 | `hkdata` CLI | 1 | 2 | 1 | 4 | 保留；下游切换到 `marketdata` 后再标记 deprecated |
 | `hk_data_platform.*` | 6 | 3 | 1 | 5 | 保留；先做下游 import 审计 |
-| `market_data_platform.rqdata_cn` / `tushare_cn` | 2 | 2 | 1 | 1 | 保留；推荐 provider namespace |
 | `marketdata migration status` | 1 | 1 | 2 | 2 | 保留为迁移状态查看；长期候选为 docs-only |
 | `marketdata migration sync-hk-links` | 1 | 1 | 1 | 2 | 保留；等下游只读 current contract 后删除 |
 | `marketdata migration import-cross-artifacts` | 1 | 2 | 3 | 2 | Deprecated wrapper；执行逻辑已归档到 `scripts/internal/import_cross_artifacts.py`，后续确认无下游依赖后移除 CLI wrapper |

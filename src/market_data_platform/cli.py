@@ -25,26 +25,29 @@ from market_data_platform.paths import (
     normalize_provider,
     resolve_artifacts_root,
 )
-from market_data_platform.providers.rqdata_cn import export_cn_instruments, mirror_cn_daily
-from market_data_platform.providers.tushare_cn import (
-    export_cn_instruments as export_tushare_cn_instruments,
+from market_data_platform.providers.rqdata_a_share import (
+    export_a_share_instruments,
+    mirror_a_share_daily,
 )
-from market_data_platform.providers.tushare_cn import (
-    mirror_cn_adj_factor as mirror_tushare_cn_adj_factor,
+from market_data_platform.providers.tushare_a_share import (
+    export_a_share_instruments as export_tushare_a_share_instruments,
 )
-from market_data_platform.providers.tushare_cn import (
-    mirror_cn_daily as mirror_tushare_cn_daily,
+from market_data_platform.providers.tushare_a_share import (
+    mirror_a_share_adj_factor as mirror_tushare_a_share_adj_factor,
 )
-from market_data_platform.providers.tushare_cn import (
-    mirror_cn_daily_basic as mirror_tushare_cn_daily_basic,
+from market_data_platform.providers.tushare_a_share import (
+    mirror_a_share_daily as mirror_tushare_a_share_daily,
 )
-from market_data_platform.providers.tushare_cn import (
-    mirror_cn_limit_status as mirror_tushare_cn_limit_status,
+from market_data_platform.providers.tushare_a_share import (
+    mirror_a_share_daily_basic as mirror_tushare_a_share_daily_basic,
 )
-from market_data_platform.providers.tushare_cn import (
-    mirror_cn_trade_cal as mirror_tushare_cn_trade_cal,
+from market_data_platform.providers.tushare_a_share import (
+    mirror_a_share_limit_status as mirror_tushare_a_share_limit_status,
 )
-from market_data_platform.providers.tushare_cn import (
+from market_data_platform.providers.tushare_a_share import (
+    mirror_a_share_trade_cal as mirror_tushare_a_share_trade_cal,
+)
+from market_data_platform.providers.tushare_a_share import (
     verify_tushare_tokens,
 )
 from market_data_platform.registry import (
@@ -54,7 +57,7 @@ from market_data_platform.registry import (
 from market_data_platform.transitions import transition_status
 from market_data_platform.tushare_cli import add_tushare_parser
 
-MARKET_CHOICES = tuple(market for market in ("hk", "cn") if market in SUPPORTED_MARKETS)
+MARKET_CHOICES = tuple(market for market in ("hk", "a_share") if market in SUPPORTED_MARKETS)
 REGISTRY_MARKET_CHOICES = ("all", *MARKET_CHOICES)
 PROVIDER_CHOICES = ("rqdata", "tushare")
 
@@ -128,7 +131,7 @@ def _add_registry_parser(subparsers: argparse._SubParsersAction) -> None:
         "--contract",
         help=(
             "Use one explicit current contract. Default: combine existing "
-            "metadata/current_assets/{hk,cn}_current.json files."
+            "metadata/current_assets/{hk,a_share}_current.json files."
         ),
     )
     build.add_argument(
@@ -188,7 +191,7 @@ def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
     rqdata_subparsers = parser.add_subparsers(dest="rqdata_command", required=True)
 
     instruments = rqdata_subparsers.add_parser(
-        "export-cn-instruments",
+        "export-a-share-instruments",
         help="Export A-share instruments from RQData.",
     )
     instruments.add_argument("--out", required=True)
@@ -197,7 +200,7 @@ def _add_rqdata_parser(subparsers: argparse._SubParsersAction) -> None:
     instruments.add_argument("--symbols-out")
 
     daily = rqdata_subparsers.add_parser(
-        "mirror-cn-daily",
+        "mirror-a-share-daily",
         help="Mirror A-share daily bars from RQData into a parquet asset directory.",
     )
     daily.add_argument("--symbols-file", required=True)
@@ -653,15 +656,15 @@ def _handle_backup_data(args: argparse.Namespace) -> int:
 
 
 def _handle_rqdata(args: argparse.Namespace) -> int:
-    if args.rqdata_command == "export-cn-instruments":
-        summary = export_cn_instruments(
+    if args.rqdata_command == "export-a-share-instruments":
+        summary = export_a_share_instruments(
             out=args.out,
             date=args.date,
             instrument_type=args.instrument_type,
             symbols_out=args.symbols_out,
         )
-    elif args.rqdata_command == "mirror-cn-daily":
-        summary = mirror_cn_daily(
+    elif args.rqdata_command == "mirror-a-share-daily":
+        summary = mirror_a_share_daily(
             symbols_file=args.symbols_file,
             out_dir=args.out_dir,
             start_date=args.start_date,
@@ -768,16 +771,16 @@ def _handle_tushare(args: argparse.Namespace) -> int:
         summary = verify_tushare_tokens(env_keys=args.env_keys)
         print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if summary["valid_tokens"] else 1
-    if args.tushare_command == "export-cn-instruments":
-        summary = export_tushare_cn_instruments(
+    if args.tushare_command == "export-a-share-instruments":
+        summary = export_tushare_a_share_instruments(
             out=args.out,
             list_statuses=args.list_statuses,
             fields=args.fields,
             symbols_out=args.symbols_out,
             token_env=args.token_env,
         )
-    elif args.tushare_command == "mirror-cn-trade-cal":
-        summary = mirror_tushare_cn_trade_cal(
+    elif args.tushare_command == "mirror-a-share-trade-cal":
+        summary = mirror_tushare_a_share_trade_cal(
             out=args.out,
             start_date=args.start_date,
             end_date=args.end_date,
@@ -786,11 +789,10 @@ def _handle_tushare(args: argparse.Namespace) -> int:
         )
     else:
         commands = {
-            "mirror-cn-daily": mirror_tushare_cn_daily,
-            "mirror-cn-adj-factor": mirror_tushare_cn_adj_factor,
-            "mirror-cn-daily-basic": mirror_tushare_cn_daily_basic,
-            "mirror-cn-stk-limit": mirror_tushare_cn_limit_status,
-            "mirror-cn-limit-status": mirror_tushare_cn_limit_status,
+            "mirror-a-share-daily": mirror_tushare_a_share_daily,
+            "mirror-a-share-adj-factor": mirror_tushare_a_share_adj_factor,
+            "mirror-a-share-daily-basic": mirror_tushare_a_share_daily_basic,
+            "mirror-a-share-limit-status": mirror_tushare_a_share_limit_status,
         }
         handler = commands.get(args.tushare_command)
         if handler is None:
@@ -815,10 +817,10 @@ def _handle_migration_status(args: argparse.Namespace) -> int:
     payload = {
         "native": [
             {
-                "name": "cn-tushare",
+                "name": "a-share-tushare",
                 "status": "native",
                 "capability": (
-                    "CN instruments, trade calendar, daily, adj-factor, daily-basic, "
+                    "A-share instruments, trade calendar, daily, adj-factor, daily-basic, "
                     "and stk-limit mirrors"
                 ),
             },
@@ -839,9 +841,9 @@ def _handle_migration_status(args: argparse.Namespace) -> int:
                 ),
             },
             {
-                "name": "cn-rqdata",
+                "name": "a-share-rqdata",
                 "status": "native",
-                "capability": "CN instruments and daily mirror MVP",
+                "capability": "A-share instruments and daily mirror MVP",
             },
         ],
         "transition_backends": transition_status(),
