@@ -6,15 +6,15 @@
 
 ## 当前职责
 
-本仓库维护 HK / CN 共享数据控制面，当前包含：
+本仓库维护中国香港市场和中国大陆市场的共享数据控制面，当前包含：
 
 - 数据契约、路径规范、asset key、manifest、dataset registry 和 current contract。
-- CN RQData / TuShare 基础镜像入口。
-- HK tick-depth 下载、health、aggregate、reconcile 和 release 工具。
-- HK RQData assets 的 mirror、clean、PIT、valuation、industry、intraday、health、audit、current refresh 和 release 工具。
+- 中国大陆市场 RQData / TuShare 基础镜像入口。
+- 港股 tick-depth 下载、health、aggregate、reconcile 和 release 工具。
+- 中国香港市场 RQData assets 的 mirror、clean、PIT、valuation、industry、intraday、health、audit、current refresh 和 release 工具。
 - `marketdata` 统一 CLI，以及保留中的旧命令和旧 import 兼容层。
 
-`cross-sectional-trees` 是下游策略仓库，只读消费平台发布的数据资产。历史迁移记录保留在 `docs/migration-plan.md`；仍支持的旧入口记录在 `docs/compatibility.md`。
+下游策略、交易或报表系统应只读消费平台发布的数据资产。历史迁移记录保留在 `docs/migration-plan.md`；仍支持的旧入口记录在 `docs/compatibility.md`。
 
 ## 生命周期分类
 
@@ -110,7 +110,7 @@
 | `marketdata migration import-cross-artifacts` | 1 | 2 | 3 | 2 | Deprecated wrapper；执行逻辑已归档到 `scripts/internal/import_cross_artifacts.py`，后续确认无下游依赖后移除 CLI wrapper |
 | `rqdata-hk-depth` / `rqdata-tick` | 1 | 1 | 4 | 4 | 保留；新任务使用 `marketdata rqdata hk-depth -- ...` |
 | `rqdata-hk-assets` | 1 | 1 | 4 | 3 | 保留；已补 console script smoke test |
-| HK release presets | 0 | 0 | 1 | 2 | 保留；定期归档历史 snapshot preset |
+| HK release presets | 0 | 0 | 1 | 2 | 中国香港市场发布配置；保留并定期归档历史 snapshot preset |
 
 ## 生成文件与数据产物
 

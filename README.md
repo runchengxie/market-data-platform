@@ -1,19 +1,23 @@
 # market-data-platform
 
-HK / CN 研究数据资产的共享控制面。
+面向量化研究和数据工程的市场数据资产平台。
 
-本仓库负责把市场数据的生产、检查、发布和读取入口统一起来：定义数据契约、资产路径、注册表、健康巡检和发布工作流。大体量行情数据、缓存、报告和本地凭证不进入 Git。
+本仓库负责把市场数据的采集、检查、发布和读取入口统一起来：定义数据契约、资产路径、注册表、健康巡检和发布工作流。大体量行情数据、缓存、报告和本地凭证不进入 Git。
+
+正文以“中国香港市场 / 港股”和“中国大陆市场 / A 股”描述业务范围。命令参数、目录名和文件名示例展示的是现有接口契约；公开接口或历史路径的命名调整应单独评估兼容影响。
 
 ## 这个项目解决什么问题
 
-研究仓库需要稳定读取同一套 HK / CN 市场数据。`market-data-platform` 将这些公共能力集中维护：
+很多研究、回测、交易和报表系统都需要稳定读取同一套市场数据。如果每个项目各自维护下载脚本、数据目录和质量检查，最终很容易出现“同名数据版本不同”“latest 指向不清楚”“本地缓存不可复现”等问题。
+
+`market-data-platform` 将这些公共能力集中维护：
 
 - 定义资产键、共享目录结构和 current contract。
-- 维护 HK RQData assets、HK tick-depth、CN RQData / TuShare 基础采集入口。
+- 维护中国香港市场 RQData 资产、港股 tick-depth，以及中国大陆市场 RQData / TuShare 基础采集入口。
 - 生成 `hk_current.json` / `cn_current.json` 和 `dataset_registry.csv`，让下游按契约读取确定的数据版本。
 - 提供数据目录、标准层物化、DuckDB 查询、本地快照备份和质量治理脚本。
 
-`cross-sectional-trees` 是策略研究下游，只读消费本仓库发布的数据资产。
+下游系统不需要了解平台内部如何采集和清洗数据，只需要读取已发布的 current contract、manifest 和标准化数据目录。
 
 ## 快速开始
 
@@ -89,9 +93,9 @@ registry 是面向人工排查的数据目录摘要，由 current contract 和 m
 
 ## 常用工作流
 
-### HK 数据维护
+### 中国香港市场数据维护
 
-HK 日线、PIT、估值、行业、股票池、日内、tick-depth、current refresh 和发布工具都走 `marketdata`：
+港股日线、PIT 财务、估值、行业、股票池、日内、tick-depth、current refresh 和发布工具都走 `marketdata`。常用入口如下：
 
 ```bash
 marketdata rqdata hk-assets -- --help
@@ -104,9 +108,9 @@ marketdata rqdata refresh-hk-fundamentals --help
 
 维护说明见 [docs/hk-assets.md](docs/hk-assets.md)。
 
-### CN 数据采集
+### 中国大陆市场数据采集
 
-CN 支持 RQData 与 TuShare 基础采集入口。TuShare 相关命令需要安装可选依赖并配置 token：
+中国大陆市场数据当前支持 RQData 与 TuShare 基础采集入口，主要面向 A 股相关数据。TuShare 相关命令需要安装可选依赖并配置 token：
 
 ```bash
 uv sync --extra dev --extra tushare
@@ -139,9 +143,9 @@ marketdata backup-data --include-path configs/presets/release/hk_current.yml
 market-data-platform/
   src/market_data_platform/      平台主包和 marketdata CLI
   src/market_data_platform/hk_assets/
-                                HK RQData assets 维护实现
+                                中国香港市场 RQData 资产维护实现
   src/market_data_platform/hk_depth/
-                                HK tick-depth 下载、检查、聚合与发布
+                                港股 tick-depth 下载、检查、聚合与发布
   src/hk_data_platform/          旧包名兼容层
   configs/presets/               发布与 universe preset
   docs/                          契约、操作、迁移和治理文档
@@ -166,6 +170,6 @@ CI 还会运行质量债务和架构治理检查。开发命令清单见 [docs/o
 从 [docs/README.md](docs/README.md) 开始。新人通常按这个顺序阅读：
 
 1. [docs/contracts.md](docs/contracts.md)：理解 artifacts root、asset key、current contract。
-1. [docs/hk-assets.md](docs/hk-assets.md)：了解 HK 数据生产和发布入口。
-1. [docs/operations.md](docs/operations.md)：配置凭证、运行 CN/TuShare、备份和本地开发命令。
-1. [docs/integrations.md](docs/integrations.md)：了解下游项目如何只读接入。
+1. [docs/hk-assets.md](docs/hk-assets.md)：了解中国香港市场数据生产和发布入口。
+1. [docs/operations.md](docs/operations.md)：配置凭证、运行中国大陆市场 / TuShare 数据采集、备份和本地开发命令。
+1. [docs/integrations.md](docs/integrations.md)：了解下游系统如何只读接入。

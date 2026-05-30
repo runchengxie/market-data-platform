@@ -1,6 +1,6 @@
-# HK 数据资产维护
+# 中国香港市场数据资产维护
 
-本页是 HK 数据资产生命周期的维护入口。`cross-sectional-trees` 只消费这里发布的数据资产，下载、清洗、健康检查、current contract 和 release 由本仓库维护。
+本页是中国香港市场数据资产生命周期的维护入口，主要覆盖港股日线、财务、估值、行业、日内和 tick-depth 等数据。下游研究或交易系统只消费这里发布的数据资产；下载、清洗、健康检查、current contract 和 release 由本仓库维护。
 
 ## 入口命令
 
@@ -38,7 +38,7 @@ rqdata-hk-assets --help
 
 ## 主要资产
 
-平台侧负责以下 HK 数据资产：
+平台侧负责以下中国香港市场数据资产：
 
 * daily / daily_clean
 * instruments
@@ -82,7 +82,7 @@ marketdata rqdata inspect-hk-current \
 
 `marketdata rqdata hk-depth -- ...` 和 `marketdata rqdata refresh-hk-depth` 使用平台内 `market_data_platform.hk_depth` 实现；安装本包后也会提供兼容命令 `rqdata-hk-depth` 和 `rqdata-tick`。`marketdata rqdata hk-assets -- ...` 使用平台内 `market_data_platform.hk_assets` 实现；安装本包后也会提供 `rqdata-hk-assets` 命令。
 
-## Intraday
+## 日内数据
 
 5m 日内数据刷新入口：
 
@@ -94,11 +94,11 @@ marketdata rqdata refresh-hk-intraday \
 ```
 
 底层实现位于 `market_data_platform.hk_assets.intraday_download`。旧的
-`python -m cstree.research.hk_intraday_download` 是 cross 仓库里的兼容 wrapper。
+`python -m cstree.research.hk_intraday_download` 是历史下游项目里的兼容 wrapper；新项目应直接使用 `marketdata rqdata refresh-hk-intraday`。
 
-## 历史 cross 产物导入
+## 历史平台产物导入
 
-如果历史数据平台产物还留在 `cross-sectional-trees/artifacts`，先 dry-run：
+如果历史数据平台产物还留在旧的下游研究仓库目录中，可以先 dry-run 查看迁移计划：
 
 ```bash
 marketdata migration import-cross-artifacts \
@@ -114,4 +114,4 @@ marketdata migration import-cross-artifacts \
   --apply
 ```
 
-该命令只迁移平台归属的 assets、metadata、intraday cache、release 和 HK health/audit 报告；研究 runs、sweeps、live/export、benchmark 和 slippage 报告留在策略仓库。
+该命令只迁移平台归属的 assets、metadata、intraday cache、release 和中国香港市场 health/audit 报告；研究 runs、sweeps、live/export、benchmark 和 slippage 报告应留在原下游项目。

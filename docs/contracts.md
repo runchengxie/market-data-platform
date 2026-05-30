@@ -10,7 +10,7 @@
 export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-`DATA_PLATFORM_ROOT` 是推荐使用的跨项目通用环境变量，用于指定共享市场数据输入路径。`HK_DATA_PLATFORM_ROOT` 作为旧 HK 调用方的兼容变量保留。`CSTREE_ARTIFACTS_ROOT` 用于覆盖策略输出根目录；下游项目只在需要把运行记录、缓存或报告也写入共享根目录时使用它。
+`DATA_PLATFORM_ROOT` 是推荐使用的跨项目通用环境变量，用于指定共享市场数据输入路径。`HK_DATA_PLATFORM_ROOT` 作为旧中国香港市场调用方的兼容变量保留。`CSTREE_ARTIFACTS_ROOT` 是部分下游策略项目的历史输出根目录变量；一般下游系统只在需要把运行记录、缓存或报告也写入共享根目录时才需要类似配置。
 
 ## 当前数据契约
 
@@ -50,7 +50,7 @@ marketdata contract build \
   --target-date 20260409
 ```
 
-默认情况下，该命令会同时合并已存在的 HK/CN current contracts 生成
+默认情况下，该命令会同时合并已存在的中国香港市场 / 中国大陆市场 current contracts 生成
 `metadata/dataset_registry.csv`。如只需写入 JSON 契约，可加 `--no-registry`。
 
 ## 数据资产键名
@@ -80,14 +80,14 @@ marketdata contract build \
 | `universe_symbols` | `assets/universe/hk_all_full_symbols.txt` |
 | `universe_meta` | `assets/universe/hk_all_full_by_date.meta.yml` |
 
-CN 使用同一套 asset key 语义，但路径落在 `assets/rqdata/cn/...`，并额外预留
+中国大陆市场使用同一套 asset key 语义，但路径落在 `assets/rqdata/cn/...`，并额外预留
 `st_flags`、`suspend`、`limit_status`、`index_components`、`industry_citic`、
 `industry_sw`、`northbound` 等 A 股数据资产键。
 
-CN contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此模式下
+中国大陆市场 contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此模式下
 `cn_current.json` 的 `contract.provider` 为 `tushare`，当前支持的路径为：
 
-| 资产键名 (Asset key) | TuShare CN 默认路径 |
+| 资产键名 (Asset key) | TuShare 中国大陆市场默认路径 |
 | --- | --- |
 | `instruments` | `assets/tushare/cn/instruments/cn_all_instruments_latest.parquet` |
 | `trade_cal` | `assets/tushare/cn/trade_cal/cn_trade_cal_latest.parquet` |
@@ -97,7 +97,7 @@ CN contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此
 | `limit_status` | `assets/tushare/cn/limit_status/cn_limit_status_latest` |
 | `daily_clean` | `assets/tushare/cn/daily/cn_all_daily_clean_latest` |
 
-不传 `--provider` 的 CN contract 继续使用原有 `rqdata` 布局。单个
+不传 `--provider` 的中国大陆市场 contract 继续使用原有 `rqdata` 布局。单个
 `cn_current.json` 只表示当前采纳的 provider，不汇总多个 provider 的 raw 快照。
 
 ## 数据集注册表 (Dataset Registry)
@@ -106,7 +106,7 @@ CN contract 可通过 `--provider tushare` 显式选择 TuShare raw 资产。此
 <artifacts_root>/metadata/dataset_registry.csv
 ```
 
-该注册表是一个专为人类阅读设计的精简索引文件，其内容由 `hk_current.json` / `cn_current.json` 和各项数据资产的数据清单推导生成。当前数据契约才是下游读取路径时的权威入口。
+该注册表是一个专为人类阅读设计的精简索引文件，其内容由中国香港市场 / 中国大陆市场 current contract 和各项数据资产的数据清单推导生成。当前数据契约才是下游读取路径时的权威入口。
 
 也可以单独重建注册表：
 

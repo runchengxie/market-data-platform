@@ -1,11 +1,14 @@
 # 系统集成 (Integrations)
 
-## cross-sectional-trees
+本页说明下游研究、回测、交易和报表系统如何接入本平台发布的数据资产。下游系统应把本平台视为只读数据源，不需要了解平台内部的采集、清洗和发布实现。
 
-当前定位：
-* 负责策略研究、特征工程（features）、模型构建、回测、持仓管理及报告生成。
-* 仅作为已发布 HK / CN 数据资产的下游只读调用方。
-* HK 数据生产、检查和发布入口位于本仓库：`marketdata rqdata hk-assets -- ...` 或更高层的 `marketdata rqdata refresh-hk-*`。
+## 下游系统接入边界
+
+推荐定位：
+* 下游系统负责自己的策略研究、特征工程、模型构建、回测、持仓管理或报告生成。
+* 下游系统仅作为已发布数据资产的只读调用方。
+* 中国香港市场数据的生产、检查和发布入口位于本仓库：`marketdata rqdata hk-assets -- ...` 或更高层的 `marketdata rqdata refresh-hk-*`。
+* 中国大陆市场数据的基础采集入口也位于本仓库；当前主要覆盖 RQData / TuShare 原始层和 current contract 发布。
 
 环境配置：
 
@@ -13,7 +16,7 @@
 export DATA_PLATFORM_ROOT=/data/market-data-platform
 ```
 
-这样配置可将策略的运行结果、缓存和报告输出保留在策略代码仓库本地，同时将市场数据输入路径指向共享的数据根目录。`CSTREE_ARTIFACTS_ROOT` 或 `paths.artifacts_root` 只用于需要把策略默认输出也写入平台根目录的场景。
+这样配置可将下游系统的运行结果、缓存和报告输出保留在自身项目目录，同时将市场数据输入路径指向共享的数据根目录。下游项目如有自己的输出根目录配置，应只在确实需要把运行产物也写入平台根目录时使用。
 
 覆盖默认输出路径：
 
@@ -29,12 +32,12 @@ paths:
 
 ---
 
-## HK tick-depth
+## 港股 tick-depth
 
 当前定位：
 * 原始数据下载、数据质量监控（health checks）、日频数据聚合、数据对账（reconciliation）以及打包发布实现由 `market_data_platform.hk_depth` 承载。
 * 推荐统一入口为 `marketdata rqdata hk-depth -- ...`；安装本包后也会提供 `rqdata-hk-depth` 兼容命令。
-* `research-workspace` 已停止追踪 `rqdata-hk-depth-snapshots` 子模块；workspace 内不支持 `rqdata_tick_data.*` 旧 Python import 路径。
+* 旧的 `rqdata_tick_data.*` Python import 路径不再作为公开接口维护；新项目应使用 `marketdata` CLI 或 `market_data_platform.hk_depth`。
 
 推荐发布路径：
 

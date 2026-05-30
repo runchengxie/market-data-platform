@@ -68,7 +68,7 @@ uv run --extra dev python scripts/dev/maintainability_metrics.py --check-baselin
    `release_tools` 和 `hk_assets`，把目录级排除收窄成具体文件问题。
 1. Pyright：优先处理 contracts、paths、manifest、registry、current assets 等边界模块。
 1. Pyright：provider contract 使用 `Protocol`、`TypedDict` 或 dataclass 稳定接口后再扩大覆盖。
-1. HK assets / HK depth / release workflows：先通过 maintainability metrics 锁定长函数，
+1. 中国香港市场 assets / 港股 depth / release workflows：先通过 maintainability metrics 锁定长函数，
    再按 plan/config、fetch、transform、validate、persist、manifest、report 拆分。
 
 当前覆盖数据和维护热点见 `docs/maintenance-audit.md`。
