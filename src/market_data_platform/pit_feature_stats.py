@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
+
+
+def _to_datetime_series(series: pd.Series) -> pd.Series:
+    return cast(pd.Series, pd.to_datetime(series, errors="coerce"))
+
+
+def _to_numeric_series(series: pd.Series) -> pd.Series:
+    return cast(pd.Series, pd.to_numeric(series, errors="coerce"))
 
 
 def compute_trailing_calendar_window_stat(
@@ -16,8 +26,8 @@ def compute_trailing_calendar_window_stat(
     if frame.empty:
         return result
 
-    trade_dates = pd.to_datetime(frame["trade_date"], errors="coerce")
-    values = pd.to_numeric(value_series, errors="coerce")
+    trade_dates = _to_datetime_series(cast(pd.Series, frame["trade_date"]))
+    values = _to_numeric_series(value_series)
 
     for _, index_values in frame.groupby("symbol", sort=False).groups.items():
         group_index = pd.Index(index_values)
@@ -46,8 +56,8 @@ def compute_calendar_cagr(
     if frame.empty:
         return result
 
-    trade_dates = pd.to_datetime(frame["trade_date"], errors="coerce")
-    values = pd.to_numeric(value_series, errors="coerce")
+    trade_dates = _to_datetime_series(cast(pd.Series, frame["trade_date"]))
+    values = _to_numeric_series(value_series)
 
     for _, index_values in frame.groupby("symbol", sort=False).groups.items():
         group_index = pd.Index(index_values)

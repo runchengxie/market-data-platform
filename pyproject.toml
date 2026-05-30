@@ -108,7 +108,6 @@ exclude = [
   "src/market_data_platform/hk_assets",
   "src/market_data_platform/data_providers.py",
   "src/market_data_platform/data_warehouse.py",
-  "src/market_data_platform/pit_feature_stats.py",
   "src/market_data_platform/release_tools",
   "src/market_data_platform/rqdata_runtime.py",
 ]
