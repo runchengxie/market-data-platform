@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import yaml
 
 from .tushare_a_share import _normalize_ts_code, _write_manifest
 
@@ -63,8 +61,10 @@ def _prepare_index_frame(frame: pd.DataFrame, *, label: str) -> pd.DataFrame:
     if "trade_date" not in out.columns:
         raise ValueError(f"{label} is missing trade_date.")
     out["trade_date"] = out["trade_date"].map(_normalize_trade_date)
-    out = out[(out["symbol"] != "") & (out["trade_date"].str.fullmatch(r"\d{8}", na=False))]
-    return out
+    return out[
+        (out["symbol"] != "")
+        & (out["trade_date"].str.fullmatch(r"\d{8}", na=False))
+    ]
 
 
 def _load_instruments(instruments_file: str | Path | None) -> pd.DataFrame:
@@ -130,7 +130,10 @@ def _derive_st_flag(daily: pd.DataFrame, instruments: pd.DataFrame) -> pd.Series
     st_symbols: set[str] = set()
     for col in name_cols:
         names = lookup[col].astype(str)
-        st_symbols.update(names[names.str.contains(r"\*?ST", case=False, regex=True, na=False)].index.tolist())
+        st_symbols.update(
+            names[names.str.contains(r"\*?ST", case=False, regex=True, na=False)]
+            .index.tolist()
+        )
     return daily["symbol"].isin(st_symbols)
 
 
@@ -178,7 +181,11 @@ def build_a_share_daily_clean(
         if not adj.empty and "adj_factor" in adj.columns:
             adj["adj_factor"] = pd.to_numeric(adj["adj_factor"], errors="coerce")
             adj = adj.drop_duplicates(subset=["symbol", "trade_date"], keep="last")
-            out = out.merge(adj[["symbol", "trade_date", "adj_factor"]], on=["symbol", "trade_date"], how="left")
+            out = out.merge(
+                adj[["symbol", "trade_date", "adj_factor"]],
+                on=["symbol", "trade_date"],
+                how="left",
+            )
     if "adj_factor" not in out.columns:
         out["adj_factor"] = pd.NA
     out["adj_factor"] = pd.to_numeric(out["adj_factor"], errors="coerce")
@@ -196,8 +203,15 @@ def build_a_share_daily_clean(
         )
         if not daily_basic.empty:
             daily_basic = daily_basic.drop_duplicates(subset=["symbol", "trade_date"], keep="last")
-            keep = ["symbol", "trade_date", *(col for col in VALUATION_COLUMNS if col in daily_basic.columns)]
-            _safe_numeric(daily_basic, tuple(col for col in keep if col not in {"symbol", "trade_date"}))
+            keep = [
+                "symbol",
+                "trade_date",
+                *(col for col in VALUATION_COLUMNS if col in daily_basic.columns),
+            ]
+            _safe_numeric(
+                daily_basic,
+                tuple(col for col in keep if col not in {"symbol", "trade_date"}),
+            )
             out = out.merge(daily_basic[keep], on=["symbol", "trade_date"], how="left")
 
     limit_status = pd.DataFrame()
@@ -206,9 +220,18 @@ def build_a_share_daily_clean(
             _read_parquet_parts(limit_status_dir, label="limit_status"), label="limit_status"
         )
         if not limit_status.empty:
-            limit_status = limit_status.drop_duplicates(subset=["symbol", "trade_date"], keep="last")
-            keep = ["symbol", "trade_date", *(col for col in LIMIT_COLUMNS if col in limit_status.columns)]
-            _safe_numeric(limit_status, tuple(col for col in keep if col not in {"symbol", "trade_date"}))
+            limit_status = limit_status.drop_duplicates(
+                subset=["symbol", "trade_date"], keep="last"
+            )
+            keep = [
+                "symbol",
+                "trade_date",
+                *(col for col in LIMIT_COLUMNS if col in limit_status.columns),
+            ]
+            _safe_numeric(
+                limit_status,
+                tuple(col for col in keep if col not in {"symbol", "trade_date"}),
+            )
             out = out.merge(limit_status[keep], on=["symbol", "trade_date"], how="left")
     for column in LIMIT_COLUMNS:
         if column not in out.columns:
@@ -222,7 +245,9 @@ def build_a_share_daily_clean(
 
     suspend = None
     if suspend_dir is not None:
-        suspend = _prepare_index_frame(_read_parquet_parts(suspend_dir, label="suspend"), label="suspend")
+        suspend = _prepare_index_frame(
+            _read_parquet_parts(suspend_dir, label="suspend"), label="suspend"
+        )
         suspend = _normalize_suspension_columns(suspend)
     out["is_suspended"] = _derive_is_suspended(out, suspend)
 
@@ -265,11 +290,27 @@ def build_a_share_daily_clean(
         "output_dir": str(output_dir),
         "inputs": {
             "daily_dir": str(Path(daily_dir).expanduser().resolve()),
-            "adj_factor_dir": str(Path(adj_factor_dir).expanduser().resolve()) if adj_factor_dir else None,
-            "daily_basic_dir": str(Path(daily_basic_dir).expanduser().resolve()) if daily_basic_dir else None,
-            "limit_status_dir": str(Path(limit_status_dir).expanduser().resolve()) if limit_status_dir else None,
+            "adj_factor_dir": (
+                str(Path(adj_factor_dir).expanduser().resolve())
+                if adj_factor_dir
+                else None
+            ),
+            "daily_basic_dir": (
+                str(Path(daily_basic_dir).expanduser().resolve())
+                if daily_basic_dir
+                else None
+            ),
+            "limit_status_dir": (
+                str(Path(limit_status_dir).expanduser().resolve())
+                if limit_status_dir
+                else None
+            ),
             "suspend_dir": str(Path(suspend_dir).expanduser().resolve()) if suspend_dir else None,
-            "instruments_file": str(Path(instruments_file).expanduser().resolve()) if instruments_file else None,
+            "instruments_file": (
+                str(Path(instruments_file).expanduser().resolve())
+                if instruments_file
+                else None
+            ),
         },
         "totals": {"rows": rows, "symbols": symbols, "files": symbols},
         "quality": {
@@ -294,14 +335,31 @@ def validate_a_share_daily_clean(
     require_valuation: bool = False,
     require_limit_status: bool = False,
 ) -> dict[str, Any]:
-    frame = _prepare_index_frame(_read_parquet_parts(daily_clean_dir, label="daily_clean"), label="daily_clean")
-    required = {"symbol", "trade_date", "close", "tr_close", "is_st", "is_suspended", "is_limit_up", "is_limit_down"}
+    frame = _prepare_index_frame(
+        _read_parquet_parts(daily_clean_dir, label="daily_clean"), label="daily_clean"
+    )
+    required = {
+        "symbol",
+        "trade_date",
+        "close",
+        "tr_close",
+        "is_st",
+        "is_suspended",
+        "is_limit_up",
+        "is_limit_down",
+    }
     missing = sorted(required.difference(frame.columns))
     if require_valuation:
-        missing.extend(sorted({"pe_ttm", "pb", "total_mv", "turnover_rate"}.difference(frame.columns)))
+        missing.extend(
+            sorted({"pe_ttm", "pb", "total_mv", "turnover_rate"}.difference(frame.columns))
+        )
     if require_limit_status:
         missing.extend(sorted({"up_limit", "down_limit"}.difference(frame.columns)))
-    duplicate_rows = int(frame.duplicated(subset=["symbol", "trade_date"]).sum()) if not frame.empty else 0
+    duplicate_rows = (
+        int(frame.duplicated(subset=["symbol", "trade_date"]).sum())
+        if not frame.empty
+        else 0
+    )
     rows = int(len(frame))
     symbols = int(frame["symbol"].nunique()) if "symbol" in frame.columns else 0
     errors = []

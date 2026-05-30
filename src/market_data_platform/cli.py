@@ -52,6 +52,8 @@ from market_data_platform.providers.tushare_a_share import (
 )
 from market_data_platform.providers.tushare_a_share_clean import (
     build_a_share_daily_clean as build_tushare_a_share_daily_clean,
+)
+from market_data_platform.providers.tushare_a_share_clean import (
     validate_a_share_daily_clean as validate_tushare_a_share_daily_clean,
 )
 from market_data_platform.registry import (
