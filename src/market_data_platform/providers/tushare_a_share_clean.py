@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -61,10 +61,8 @@ def _prepare_index_frame(frame: pd.DataFrame, *, label: str) -> pd.DataFrame:
     if "trade_date" not in out.columns:
         raise ValueError(f"{label} is missing trade_date.")
     out["trade_date"] = out["trade_date"].map(_normalize_trade_date)
-    return out[
-        (out["symbol"] != "")
-        & (out["trade_date"].str.fullmatch(r"\d{8}", na=False))
-    ]
+    mask = (out["symbol"] != "") & out["trade_date"].str.fullmatch(r"\d{8}", na=False)
+    return cast(pd.DataFrame, out.loc[mask].copy())
 
 
 def _load_instruments(instruments_file: str | Path | None) -> pd.DataFrame:
@@ -129,12 +127,10 @@ def _derive_st_flag(daily: pd.DataFrame, instruments: pd.DataFrame) -> pd.Series
     lookup = instruments.set_index("symbol")
     st_symbols: set[str] = set()
     for col in name_cols:
-        names = lookup[col].astype(str)
-        st_symbols.update(
-            names[names.str.contains(r"\*?ST", case=False, regex=True, na=False)]
-            .index.tolist()
-        )
-    return daily["symbol"].isin(st_symbols)
+        names = cast(pd.Series, lookup[col]).astype(str)
+        st_mask = names.str.contains(r"\*?ST", case=False, regex=True, na=False)
+        st_symbols.update(str(symbol) for symbol in names.loc[st_mask].index.tolist())
+    return cast(pd.Series, daily["symbol"].isin(list(st_symbols)))
 
 
 def _board_from_symbol(symbol: str) -> str:
@@ -254,7 +250,8 @@ def build_a_share_daily_clean(
     instruments = _load_instruments(instruments_file)
     out["is_st"] = _derive_st_flag(out, instruments)
     if not instruments.empty and "list_date" in instruments.columns:
-        listed = instruments[["symbol", "list_date"]].drop_duplicates("symbol", keep="last")
+        listed_frame = cast(pd.DataFrame, instruments[["symbol", "list_date"]])
+        listed = listed_frame.sort_values("symbol").groupby("symbol", as_index=False).tail(1)
         out = out.merge(listed, on="symbol", how="left")
         trade_ts = pd.to_datetime(out["trade_date"], format="%Y%m%d", errors="coerce")
         list_ts = pd.to_datetime(out["list_date"], format="%Y%m%d", errors="coerce")
