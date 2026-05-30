@@ -1,6 +1,6 @@
 import pandas as pd
 
-from cstree import data_providers
+from market_data_platform import data_providers
 
 
 def _daily_frame(symbol: str, start: str, end: str, *, close_offset: float = 0.0) -> pd.DataFrame:
