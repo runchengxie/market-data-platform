@@ -90,6 +90,25 @@ def test_verify_tokens_reports_status_without_exposing_token(monkeypatch):
     assert "secret-primary-token" not in json.dumps(summary)
 
 
+def test_verify_tokens_loads_local_env_file_without_overriding_shell_env(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
+    monkeypatch.setenv("TUSHARE_TOKEN_2", "shell-token")
+    (tmp_path / ".env.local").write_text(
+        "TUSHARE_TOKEN=local-token\nTUSHARE_TOKEN_2=local-ignored-token\n",
+        encoding="utf-8",
+    )
+    fake_tushare = FakeTushare()
+
+    summary = tushare_a_share.verify_tushare_tokens(
+        env_keys=["TUSHARE_TOKEN", "TUSHARE_TOKEN_2"],
+        tushare_module=fake_tushare,
+    )
+
+    assert summary["valid_tokens"] == 2
+    assert fake_tushare.tokens == ["local-token", "shell-token"]
+
+
 def test_verify_tokens_redacts_token_echoed_by_provider_error(monkeypatch):
     class RejectingTushare(FakeTushare):
         def trade_cal(self, *, exchange: str, start_date: str, end_date: str):

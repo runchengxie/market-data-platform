@@ -167,7 +167,70 @@ def _fields_text(fields: Iterable[str] | None, required: tuple[str, ...] = ()) -
     return ",".join(selected)
 
 
+def _env_file_candidates() -> tuple[Path, ...]:
+    roots = [Path.cwd(), Path(__file__).resolve().parents[3]]
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        for name in (".env.local", ".env"):
+            path = (root / name).expanduser().resolve()
+            if path not in seen:
+                paths.append(path)
+                seen.add(path)
+    return tuple(paths)
+
+
+def _parse_simple_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line.removeprefix("export ").lstrip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            continue
+        value = value.strip()
+        if value[:1] not in {"'", '"'} and " #" in value:
+            value = value.split(" #", 1)[0].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def _load_env_file(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        dotenv = importlib.import_module("dotenv")
+    except ImportError:
+        values = _parse_simple_env_file(path)
+    else:
+        values = {
+            str(key): str(value)
+            for key, value in dotenv.dotenv_values(path).items()
+            if key and value is not None
+        }
+    for key, value in values.items():
+        os.environ.setdefault(key, value)
+    return True
+
+
+def _load_tushare_env_files() -> tuple[str, ...]:
+    loaded: list[str] = []
+    for path in _env_file_candidates():
+        if _load_env_file(path):
+            loaded.append(str(path))
+    return tuple(loaded)
+
+
 def _resolve_token(token: str | None, token_env: str) -> str:
+    _load_tushare_env_files()
     value = str(token or os.environ.get(token_env) or "").strip()
     if not value:
         raise RuntimeError(f"No TuShare token found in environment variable {token_env}.")
@@ -193,6 +256,7 @@ def verify_tushare_tokens(
     env_keys: Iterable[str] | None = None,
     tushare_module: Any | None = None,
 ) -> dict[str, Any]:
+    _load_tushare_env_files()
     ts = tushare_module or _require_module(
         "tushare",
         install_hint="Install with the tushare optional extra.",
