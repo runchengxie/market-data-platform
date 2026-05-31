@@ -65,13 +65,26 @@ open_dates: 580
 status: completed
 ```
 
-## Publication Is Intentionally Deferred
+## Publication Completed
 
-Do not rerun the raw history download unless a new gap is found. Do not repoint
-latest aliases or rebuild `metadata/current_assets/a_share_current.json` yet.
+Do not rerun the raw history download unless a new gap is found.
 
-The existing A 股 universe assets are still the five-day sample generated from
-`20260105` to `20260109`:
+The repository now exposes canonical A 股 universe build and validation
+commands:
+
+```bash
+.venv/bin/marketdata tushare build-a-share-universe
+.venv/bin/marketdata tushare validate-a-share-universe
+```
+
+The completed clean history was used to replace the five-day sample universe.
+The previous sample files were archived under:
+
+```text
+/home/richard/data/market-data-platform/metadata/archive/universe/a_share_sample_20260109_pre_backfill_20260531/
+```
+
+The canonical universe outputs are:
 
 ```text
 /home/richard/data/market-data-platform/assets/universe/a_share_all_full_by_date.csv
@@ -79,41 +92,46 @@ The existing A 股 universe assets are still the five-day sample generated from
 /home/richard/data/market-data-platform/assets/universe/a_share_all_full_by_date.meta.yml
 ```
 
-The repository does not currently expose a canonical A 股 universe builder.
-Publishing the complete daily assets while silently retaining the sample
-universe would mix incompatible scopes in the current contract. The existing
-latest aliases and `a_share_current.json` therefore remain pointed at the
-validated five-day sample until the universe publication path is defined.
+Universe build summary:
 
-Remaining publication steps:
+```text
+rows: 151105
+symbols_seen: 5611
+symbols_selected: 5582
+latest_symbols: 5499
+trade_dates: 580
+rebalance_dates_requested: 29
+rebalance_dates: 28
+first_rebalance_date: 20240229
+last_rebalance_date: 20260529
+duplicate_rows: 0
+```
 
-1. Add or select a canonical A 股 universe build path and generate universe
-   assets aligned with the validated `20240101-20260529` snapshot.
-2. Validate the rebuilt universe coverage and archive the old sample universe
-   metadata if it will be replaced.
-3. Repoint the TuShare raw, clean, and trading-calendar latest aliases only
-   after the universe gate passes.
-4. Rebuild the canonical current contract:
+The first requested month end is intentionally excluded because the configured
+30-trading-day minimum history window is not yet available.
 
-   ```bash
-   .venv/bin/marketdata contract build \
-     --artifacts-root /home/richard/data/market-data-platform \
-     --market a_share --provider tushare \
-     --target-date 20260529 \
-     --generated-by a_share_tushare_backfill_20260531
-   ```
+Latest aliases now point to the completed `20240101` to `20260529` snapshots for
+`daily`, `daily_clean`, `adj_factor`, `daily_basic`, `limit_status`, and
+`trade_cal`.
 
-5. Inspect the rebuilt contract with a warning gate and write a report:
+The prior sample current contract was archived as:
 
-   ```bash
-   .venv/bin/marketdata contract inspect \
-     --artifacts-root /home/richard/data/market-data-platform \
-     --market a_share --provider tushare \
-     --target-date 20260529 \
-     --fail-on-severity warning \
-     --format json \
-     --out /home/richard/data/market-data-platform/reports/a_share_current_health_20260529.json
-   ```
+```text
+/home/richard/data/market-data-platform/metadata/archive/current_assets/a_share_current_20260109_sample_pre_backfill_20260531.json
+```
+
+The canonical current contract has been rebuilt at:
+
+```text
+/home/richard/data/market-data-platform/metadata/current_assets/a_share_current.json
+```
+
+The current-contract health gate passed with ten assets checked, zero missing
+assets, zero stale assets, and zero issues. The JSON report is:
+
+```text
+/home/richard/data/market-data-platform/reports/a_share_current_health_20260529.json
+```
 
 ## Original Handoff State
 

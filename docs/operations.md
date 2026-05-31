@@ -73,6 +73,35 @@ marketdata tushare mirror-a-share-daily-basic \
 data/trade_date=YYYYMMDD/part.parquet
 ```
 
+raw 快照完整后，可构建并验证 `daily_clean`，再从 `daily_clean` 生成按调仓日维护的
+A 股 full-market universe。universe builder 使用前置滚动中位成交额，避免在调仓日使用
+当日成交额：
+
+```bash
+marketdata tushare build-a-share-daily-clean \
+  --daily-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/daily/a_share_all_20240101_20260529_daily" \
+  --adj-factor-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/adj_factor/a_share_all_20240101_20260529_adj_factor" \
+  --daily-basic-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/daily_basic/a_share_all_20240101_20260529_daily_basic" \
+  --limit-status-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/limit_status/a_share_limit_status_20240101_20260529" \
+  --instruments-file "$DATA_PLATFORM_ROOT/assets/tushare/a_share/instruments/a_share_all_instruments_latest.parquet" \
+  --out-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/daily/a_share_all_20240101_20260529_daily_clean" \
+  --min-rows 3000000 --min-symbols 5000
+
+marketdata tushare build-a-share-universe \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --daily-clean-dir "$DATA_PLATFORM_ROOT/assets/tushare/a_share/daily/a_share_all_20240101_20260529_daily_clean" \
+  --start-date 20240101 --end-date 20260529 \
+  --rebalance-frequency M --lookback-days 60 --min-window-days 30 \
+  --min-rows 100000 --min-symbols 5000 --min-rebalance-dates 20
+
+marketdata tushare validate-a-share-universe \
+  --by-date-file "$DATA_PLATFORM_ROOT/assets/universe/a_share_all_full_by_date.csv" \
+  --latest-symbols-file "$DATA_PLATFORM_ROOT/assets/universe/a_share_all_full_symbols.txt" \
+  --meta-file "$DATA_PLATFORM_ROOT/assets/universe/a_share_all_full_by_date.meta.yml" \
+  --expected-as-of 20260529 \
+  --min-rows 100000 --min-symbols 5000 --min-rebalance-dates 20
+```
+
 完成校验并将 `*_latest` alias 指向采用的 snapshot 后，发布当前中国大陆市场 provider：
 
 ```bash
@@ -89,7 +118,9 @@ marketdata contract inspect --market a_share --provider tushare \
   --out "$DATA_PLATFORM_ROOT/reports/a_share_current_health_20260526.json"
 ```
 
-`marketdata tushare mirror-a-share-limit-status` 可镜像 `stk_limit` 接口形成 `limit_status` raw 资产。当前 MVP 范围包含 raw layer 采集和 contract 发布入口，clean layer、修复、质量门禁与发布打包仍需后续补齐。
+`marketdata tushare mirror-a-share-limit-status` 可镜像 `stk_limit` 接口形成 `limit_status`
+raw 资产。当前范围包含 raw layer、`daily_clean`、full-market universe 和 contract 发布入口；
+自动化 current refresh、发布打包与更完整的修复工作流仍需后续补齐。
 
 ### A 股历史 backfill 编排
 

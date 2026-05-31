@@ -152,3 +152,36 @@ def add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
     validate.add_argument("--min-symbols", type=int, default=1)
     validate.add_argument("--require-valuation", action="store_true")
     validate.add_argument("--require-limit-status", action="store_true")
+
+    universe = tushare_subparsers.add_parser(
+        "build-a-share-universe",
+        help="Build a PIT A 股 full-market universe from a local TuShare daily_clean asset.",
+    )
+    universe.add_argument("--artifacts-root")
+    universe.add_argument("--daily-clean-dir")
+    universe.add_argument("--start-date", required=True)
+    universe.add_argument("--end-date", required=True)
+    universe.add_argument("--rebalance-frequency", default="M")
+    universe.add_argument("--lookback-days", type=int, default=60)
+    universe.add_argument("--min-window-days", type=int, default=30)
+    universe.add_argument("--top-quantile", type=float, default=0.0)
+    universe.add_argument("--min-turnover", type=float, default=0.0)
+    universe.add_argument("--out")
+    universe.add_argument("--latest-out")
+    universe.add_argument("--meta-out")
+    universe.add_argument("--min-rows", type=int, default=1)
+    universe.add_argument("--min-symbols", type=int, default=1)
+    universe.add_argument("--min-rebalance-dates", type=int, default=1)
+    universe.add_argument("--force", action="store_true")
+
+    validate_universe = tushare_subparsers.add_parser(
+        "validate-a-share-universe",
+        help="Run quality gates for a TuShare A 股 full-market universe.",
+    )
+    validate_universe.add_argument("--by-date-file", required=True)
+    validate_universe.add_argument("--latest-symbols-file", required=True)
+    validate_universe.add_argument("--meta-file", required=True)
+    validate_universe.add_argument("--expected-as-of")
+    validate_universe.add_argument("--min-rows", type=int, default=1)
+    validate_universe.add_argument("--min-symbols", type=int, default=1)
+    validate_universe.add_argument("--min-rebalance-dates", type=int, default=1)

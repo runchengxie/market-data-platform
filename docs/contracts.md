@@ -108,6 +108,9 @@ marketdata contract inspect \
 | `daily_basic` | `assets/tushare/a_share/daily_basic/a_share_all_daily_basic_latest` |
 | `limit_status` | `assets/tushare/a_share/limit_status/a_share_limit_status_latest` |
 | `daily_clean` | `assets/tushare/a_share/daily/a_share_all_daily_clean_latest` |
+| `universe_by_date` | `assets/universe/a_share_all_full_by_date.csv` |
+| `universe_symbols` | `assets/universe/a_share_all_full_symbols.txt` |
+| `universe_meta` | `assets/universe/a_share_all_full_by_date.meta.yml` |
 
 不传 `--provider` 的中国大陆市场 contract 继续使用原有 `rqdata` 布局。单个
 `a_share_current.json` 只表示当前采纳的 provider，不汇总多个 provider 的 raw 快照。

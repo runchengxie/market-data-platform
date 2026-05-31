@@ -61,6 +61,12 @@ from market_data_platform.providers.tushare_a_share_clean import (
 from market_data_platform.providers.tushare_a_share_clean import (
     validate_a_share_daily_clean as validate_tushare_a_share_daily_clean,
 )
+from market_data_platform.providers.tushare_a_share_universe import (
+    build_a_share_universe as build_tushare_a_share_universe,
+)
+from market_data_platform.providers.tushare_a_share_universe import (
+    validate_a_share_universe as validate_tushare_a_share_universe,
+)
 from market_data_platform.registry import (
     render_combined_dataset_registry_csv,
     write_combined_dataset_registry,
@@ -858,6 +864,37 @@ def _handle_tushare(args: argparse.Namespace) -> int:
             min_symbols=args.min_symbols,
             require_valuation=args.require_valuation,
             require_limit_status=args.require_limit_status,
+        )
+        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if summary["status"] == "passed" else 1
+    elif args.tushare_command == "build-a-share-universe":
+        summary = build_tushare_a_share_universe(
+            artifacts_root=args.artifacts_root,
+            daily_clean_dir=args.daily_clean_dir,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            rebalance_frequency=args.rebalance_frequency,
+            lookback_days=args.lookback_days,
+            min_window_days=args.min_window_days,
+            top_quantile=args.top_quantile,
+            min_turnover=args.min_turnover,
+            out=args.out,
+            latest_out=args.latest_out,
+            meta_out=args.meta_out,
+            min_rows=args.min_rows,
+            min_symbols=args.min_symbols,
+            min_rebalance_dates=args.min_rebalance_dates,
+            force=args.force,
+        )
+    elif args.tushare_command == "validate-a-share-universe":
+        summary = validate_tushare_a_share_universe(
+            by_date_file=args.by_date_file,
+            latest_symbols_file=args.latest_symbols_file,
+            meta_file=args.meta_file,
+            expected_as_of=args.expected_as_of,
+            min_rows=args.min_rows,
+            min_symbols=args.min_symbols,
+            min_rebalance_dates=args.min_rebalance_dates,
         )
         print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if summary["status"] == "passed" else 1
