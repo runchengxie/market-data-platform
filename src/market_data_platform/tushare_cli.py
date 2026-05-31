@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 
+from market_data_platform.tushare_backfill import BACKFILL_DATASETS, BACKFILL_SEGMENTS
+
 
 def add_token_env_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -81,6 +83,51 @@ def add_tushare_parser(subparsers: argparse._SubParsersAction) -> None:
         command="mirror-a-share-limit-status",
         description="Mirror A-share daily limit prices into the limit_status asset.",
     )
+
+    backfill = tushare_subparsers.add_parser(
+        "backfill-a-share-history",
+        help="Plan or run segmented TuShare A 股 raw history backfill.",
+    )
+    backfill.add_argument("--artifacts-root")
+    backfill.add_argument("--start-date", required=True)
+    backfill.add_argument("--end-date", required=True)
+    backfill.add_argument(
+        "--dataset",
+        dest="datasets",
+        action="append",
+        choices=BACKFILL_DATASETS,
+        help=(
+            "Dataset to backfill; repeat for multiple datasets. "
+            "Defaults to all raw daily datasets."
+        ),
+    )
+    backfill.add_argument(
+        "--segment",
+        default="month",
+        choices=BACKFILL_SEGMENTS,
+        help="Backfill request segment size (default: month).",
+    )
+    backfill.add_argument(
+        "--no-skip-existing",
+        action="store_true",
+        help="Refetch partitions even when trade_date parquet files already exist.",
+    )
+    backfill.add_argument(
+        "--sync-latest",
+        action="store_true",
+        help="Point canonical latest aliases at completed backfill snapshots.",
+    )
+    backfill.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="Continue remaining segments/datasets after a provider or write error.",
+    )
+    backfill.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the backfill plan without provider calls or writes.",
+    )
+    add_token_env_argument(backfill)
 
     clean = tushare_subparsers.add_parser(
         "build-a-share-daily-clean",

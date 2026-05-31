@@ -7,6 +7,10 @@ import yaml
 
 from market_data_platform.cli import build_parser
 from market_data_platform.providers import tushare_a_share
+from market_data_platform.tushare_backfill import (
+    build_a_share_backfill_plan,
+    run_a_share_history_backfill,
+)
 
 
 class FakeDataClient:
@@ -207,3 +211,127 @@ def test_limit_status_command_is_exposed():
     parsed = parser.parse_args(["tushare", "mirror-a-share-limit-status", *required])
 
     assert parsed.tushare_command == "mirror-a-share-limit-status"
+
+
+def test_backfill_plan_segments_by_month_and_standard_paths(tmp_path):
+    plan = build_a_share_backfill_plan(
+        artifacts_root=tmp_path,
+        start_date="20260130",
+        end_date="20260302",
+        datasets=["daily", "adj_factor"],
+        segment="month",
+    )
+
+    assert plan["status"] == "planned"
+    assert plan["totals"] == {
+        "datasets": 2,
+        "segments_per_dataset": 3,
+        "dataset_segments": 6,
+    }
+    assert plan["datasets"][0]["output_dir"].endswith(
+        "assets/tushare/a_share/daily/a_share_all_20260130_20260302_daily"
+    )
+    assert plan["datasets"][0]["latest_alias"].endswith(
+        "assets/tushare/a_share/daily/a_share_all_daily_latest"
+    )
+    assert plan["datasets"][0]["segments"] == [
+        {"start_date": "20260130", "end_date": "20260131"},
+        {"start_date": "20260201", "end_date": "20260228"},
+        {"start_date": "20260301", "end_date": "20260302"},
+    ]
+
+
+def test_backfill_command_is_exposed():
+    parser = build_parser()
+
+    parsed = parser.parse_args(
+        [
+            "tushare",
+            "backfill-a-share-history",
+            "--artifacts-root",
+            "root",
+            "--start-date",
+            "20260105",
+            "--end-date",
+            "20260109",
+            "--dataset",
+            "daily",
+            "--segment",
+            "year",
+            "--dry-run",
+        ]
+    )
+
+    assert parsed.tushare_command == "backfill-a-share-history"
+    assert parsed.datasets == ["daily"]
+    assert parsed.segment == "year"
+    assert parsed.dry_run is True
+
+
+def test_backfill_writes_range_manifest_and_skips_existing_partitions(tmp_path):
+    pd = pytest.importorskip("pandas")
+    client = FakeDataClient(pd)
+
+    summary = run_a_share_history_backfill(
+        artifacts_root=tmp_path,
+        start_date="20260522",
+        end_date="20260525",
+        datasets=["daily"],
+        segment="month",
+        client=client,
+    )
+
+    assert summary["status"] == "completed"
+    assert client.daily_dates == ["20260522", "20260525"]
+    dataset = summary["datasets"][0]
+    assert dataset["totals"]["rows"] == 2
+    assert dataset["totals"]["symbols"] == 1
+    assert dataset["totals"]["trade_dates_present"] == 2
+
+    client.daily_dates.clear()
+    resumed = run_a_share_history_backfill(
+        artifacts_root=tmp_path,
+        start_date="20260522",
+        end_date="20260525",
+        datasets=["daily"],
+        segment="month",
+        client=client,
+    )
+
+    assert resumed["status"] == "completed"
+    assert client.daily_dates == []
+    resumed_totals = resumed["datasets"][0]["totals"]
+    assert resumed_totals["rows"] == 2
+    assert resumed_totals["trade_dates_written_this_run"] == 0
+    assert resumed_totals["trade_dates_skipped_this_run"] == 2
+
+    manifest_path = tmp_path / (
+        "assets/tushare/a_share/daily/"
+        "a_share_all_20260522_20260525_daily/manifest.yml"
+    )
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["query"]["start_date"] == "20260522"
+    assert manifest["query"]["end_date"] == "20260525"
+    assert manifest["totals"]["files"] == 2
+
+
+def test_backfill_sync_latest_points_alias_at_completed_snapshot(tmp_path):
+    pd = pytest.importorskip("pandas")
+
+    summary = run_a_share_history_backfill(
+        artifacts_root=tmp_path,
+        start_date="20260522",
+        end_date="20260525",
+        datasets=["daily"],
+        segment="all",
+        sync_latest=True,
+        client=FakeDataClient(pd),
+    )
+
+    alias = tmp_path / "assets/tushare/a_share/daily/a_share_all_daily_latest"
+    assert summary["datasets"][0]["latest_alias"]["alias_path"] == str(alias)
+    assert summary["datasets"][0]["latest_alias"]["target"].endswith(
+        "a_share_all_20260522_20260525_daily"
+    )
+    assert alias.is_symlink()
+    assert alias.resolve().name == "a_share_all_20260522_20260525_daily"

@@ -91,6 +91,21 @@ marketdata contract inspect --market a_share --provider tushare \
 
 `marketdata tushare mirror-a-share-limit-status` 可镜像 `stk_limit` 接口形成 `limit_status` raw 资产。当前 MVP 范围包含 raw layer 采集和 contract 发布入口，clean layer、修复、质量门禁与发布打包仍需后续补齐。
 
+### A 股历史 backfill 编排
+
+长历史下载应先用编排入口生成分段计划，再按月或按年续跑，不建议直接把 10-15 年历史一次性下完。默认按月分段、跳过已存在的 `trade_date` 分区；加 `--dry-run` 只打印计划，不访问 provider：
+
+```bash
+marketdata tushare backfill-a-share-history \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --start-date 20240101 --end-date 20260531 \
+  --dataset daily --dataset adj_factor --dataset daily_basic --dataset limit_status \
+  --segment month \
+  --dry-run
+```
+
+确认计划后去掉 `--dry-run` 执行。每个 raw asset 会写到一个 range snapshot 目录，例如 `assets/tushare/a_share/daily/a_share_all_20240101_20260531_daily/`，内部仍按 `data/trade_date=YYYYMMDD/part.parquet` 分区，并在 snapshot 根目录写 `manifest.yml` 汇总实际覆盖、跳过分区和失败分段。全部成功后可用 `--sync-latest` 将 canonical latest alias 指向本次 snapshot。
+
 ## 中国香港市场 current refresh
 
 常用中国香港市场 current contract 和增量刷新入口：

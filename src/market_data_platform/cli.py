@@ -66,6 +66,7 @@ from market_data_platform.registry import (
     write_combined_dataset_registry,
 )
 from market_data_platform.transitions import transition_status
+from market_data_platform.tushare_backfill import run_a_share_history_backfill
 from market_data_platform.tushare_cli import add_tushare_parser
 
 MARKET_CHOICES = tuple(market for market in ("hk", "a_share") if market in SUPPORTED_MARKETS)
@@ -860,6 +861,19 @@ def _handle_tushare(args: argparse.Namespace) -> int:
         )
         print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if summary["status"] == "passed" else 1
+    elif args.tushare_command == "backfill-a-share-history":
+        summary = run_a_share_history_backfill(
+            artifacts_root=args.artifacts_root,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            datasets=args.datasets,
+            segment=args.segment,
+            skip_existing=not args.no_skip_existing,
+            sync_latest=args.sync_latest,
+            dry_run=args.dry_run,
+            continue_on_error=args.continue_on_error,
+            token_env=args.token_env,
+        )
     else:
         commands = {
             "mirror-a-share-daily": mirror_tushare_a_share_daily,
