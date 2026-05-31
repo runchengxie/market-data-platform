@@ -908,13 +908,13 @@ def _handle_migration_sync_hk_links(args: argparse.Namespace) -> int:
 
 
 def _handle_migration_import_cross_artifacts(args: argparse.Namespace) -> int:
-    from scripts.internal.import_cross_artifacts import run_import_cross_artifacts
+    from market_data_platform.hk_workflows import import_cross_platform_artifacts
 
     warn_deprecated_command(
         "marketdata migration import-cross-artifacts",
         "scripts/internal/import_cross_artifacts.py or archived migration documentation",
     )
-    payload = run_import_cross_artifacts(
+    payload = import_cross_platform_artifacts(
         args.artifacts_root,
         cross_artifacts_root=args.cross_artifacts_root,
         workspace_root=args.workspace_root,

@@ -287,7 +287,7 @@ def test_import_cross_platform_artifacts_apply_copies_and_writes_manifest(tmp_pa
 def test_cli_import_cross_artifacts_defaults_to_dry_run(monkeypatch, capsys):
     observed = {}
 
-    def fake_run_import_cross_artifacts(*args, **kwargs):
+    def fake_import_cross_platform_artifacts(*args, **kwargs):
         observed["args"] = args
         observed["kwargs"] = kwargs
         return {
@@ -305,12 +305,10 @@ def test_cli_import_cross_artifacts_defaults_to_dry_run(monkeypatch, capsys):
             ],
         }
 
-    from scripts.internal import import_cross_artifacts as archived_import
-
     monkeypatch.setattr(
-        archived_import,
-        "run_import_cross_artifacts",
-        fake_run_import_cross_artifacts,
+        hk_workflows,
+        "import_cross_platform_artifacts",
+        fake_import_cross_platform_artifacts,
     )
 
     with pytest.warns(FutureWarning, match="import-cross-artifacts"):
