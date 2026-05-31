@@ -6,7 +6,7 @@ import os
 import re
 import shutil
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -17,7 +17,8 @@ from market_data_platform.current_assets import (
     load_current_contract,
 )
 from market_data_platform.paths import resolve_artifacts_root
-from market_data_platform.repo_paths import find_repo_root, resolve_repo_path as resolve_repo_relative_path
+from market_data_platform.repo_paths import find_repo_root
+from market_data_platform.repo_paths import resolve_repo_path as resolve_repo_relative_path
 
 REPO_ROOT = find_repo_root(__file__)
 ASSETS_ROOT = resolve_artifacts_root() / "assets"
@@ -203,79 +204,47 @@ def _hk_current_contract_overrides(args: argparse.Namespace) -> tuple[dict[str, 
     return overrides, contract_path
 
 
-def _validate_resolved_asset_paths(
-    *,
-    daily_dir: Path,
-    intraday_dir: Path | None,
-    etf_daily_dir: Path | None,
-    etf_instruments_path: Path | None,
-    valuation_dir: Path | None,
-    instruments_path: Path,
-    pit_dir: Path | None,
-    ex_factors_dir: Path | None,
-    dividends_dir: Path | None,
-    shares_dir: Path | None,
-    exchange_rate_dir: Path | None,
-    southbound_dir: Path | None,
-    financial_details_dir: Path | None,
-    announcement_dir: Path | None,
-    industry_changes_dir: Path | None,
-    universe_by_date_path: Path | None,
-    universe_symbols_path: Path | None,
-) -> None:
-    ensure_exists(daily_dir, "Daily snapshot directory")
-    if intraday_dir:
-        ensure_exists(intraday_dir, "Intraday snapshot directory")
-    if etf_daily_dir:
-        ensure_exists(etf_daily_dir, "ETF daily snapshot directory")
-    if etf_instruments_path:
-        ensure_exists(etf_instruments_path, "ETF instruments file")
-    if valuation_dir:
-        ensure_exists(valuation_dir, "Valuation snapshot directory")
-    ensure_exists(instruments_path, "Instruments file")
-    if pit_dir:
-        ensure_exists(pit_dir, "PIT snapshot directory")
-    if ex_factors_dir:
-        ensure_exists(ex_factors_dir, "Ex-factors snapshot directory")
-    if dividends_dir:
-        ensure_exists(dividends_dir, "Dividends snapshot directory")
-    if shares_dir:
-        ensure_exists(shares_dir, "Shares snapshot directory")
-    if exchange_rate_dir:
-        ensure_exists(exchange_rate_dir, "Exchange-rate snapshot directory")
-    if southbound_dir:
-        ensure_exists(southbound_dir, "Southbound snapshot directory")
-    if financial_details_dir:
-        ensure_exists(financial_details_dir, "Financial-details snapshot directory")
-    if announcement_dir:
-        ensure_exists(announcement_dir, "Announcement snapshot directory")
-    if industry_changes_dir:
-        ensure_exists(industry_changes_dir, "Industry changes snapshot directory")
-    if universe_by_date_path:
-        ensure_exists(universe_by_date_path, "Universe by-date file")
-    if universe_symbols_path:
-        ensure_exists(universe_symbols_path, "Universe symbols file")
+def _validate_resolved_asset_paths(requirements: Mapping[str, Path | None]) -> None:
+    for kind, path in requirements.items():
+        if path:
+            ensure_exists(path, kind)
 
 
 def _resolve_assets(args: argparse.Namespace) -> dict[str, object]:
     preset = PRESETS[args.preset]
     current_overrides, current_contract_path = _hk_current_contract_overrides(args)
-    daily_snapshot = args.daily_snapshot or current_overrides.get("daily_snapshot") or preset["daily_snapshot"]
+    daily_snapshot = (
+        args.daily_snapshot or current_overrides.get("daily_snapshot") or preset["daily_snapshot"]
+    )
     intraday_snapshot = (
         None
         if args.no_intraday
-        else (args.intraday_snapshot or current_overrides.get("intraday_snapshot") or preset.get("intraday_snapshot"))
+        else (
+            args.intraday_snapshot
+            or current_overrides.get("intraday_snapshot")
+            or preset.get("intraday_snapshot")
+        )
     )
     etf_daily_snapshot = (
         None
         if args.no_etf
-        else (args.etf_daily_snapshot or current_overrides.get("etf_daily_snapshot") or preset.get("etf_daily_snapshot"))
+        else (
+            args.etf_daily_snapshot
+            or current_overrides.get("etf_daily_snapshot")
+            or preset.get("etf_daily_snapshot")
+        )
     )
     if (
         etf_daily_snapshot == "hk_etf_daily_clean_latest"
         and not args.etf_daily_snapshot
-        and not resolve_snapshot_path(ASSETS_ROOT / "rqdata" / "hk" / "daily", etf_daily_snapshot).exists()
-        and resolve_snapshot_path(ASSETS_ROOT / "rqdata" / "hk" / "daily", "hk_etf_daily_latest").exists()
+        and not resolve_snapshot_path(
+            ASSETS_ROOT / "rqdata" / "hk" / "daily",
+            etf_daily_snapshot,
+        ).exists()
+        and resolve_snapshot_path(
+            ASSETS_ROOT / "rqdata" / "hk" / "daily",
+            "hk_etf_daily_latest",
+        ).exists()
     ):
         etf_daily_snapshot = "hk_etf_daily_latest"
     etf_instruments_file = (
@@ -290,9 +259,17 @@ def _resolve_assets(args: argparse.Namespace) -> dict[str, object]:
     valuation_snapshot = (
         None
         if args.no_valuation
-        else (args.valuation_snapshot or current_overrides.get("valuation_snapshot") or preset.get("valuation_snapshot"))
+        else (
+            args.valuation_snapshot
+            or current_overrides.get("valuation_snapshot")
+            or preset.get("valuation_snapshot")
+        )
     )
-    instruments_file = args.instruments_file or current_overrides.get("instruments_file") or preset["instruments_file"]
+    instruments_file = (
+        args.instruments_file
+        or current_overrides.get("instruments_file")
+        or preset["instruments_file"]
+    )
     pit_snapshot = (
         None
         if args.no_pit
@@ -446,9 +423,15 @@ def _resolve_assets(args: argparse.Namespace) -> dict[str, object]:
         else None
     )
     universe_root = ASSETS_ROOT / "universe"
-    universe_by_date_path = resolve_snapshot_path(universe_root, universe_by_date) if universe_by_date else None
-    universe_symbols_path = resolve_snapshot_path(universe_root, universe_symbols) if universe_symbols else None
-    universe_meta_path = resolve_snapshot_path(universe_root, universe_meta) if universe_meta else None
+    universe_by_date_path = (
+        resolve_snapshot_path(universe_root, universe_by_date) if universe_by_date else None
+    )
+    universe_symbols_path = (
+        resolve_snapshot_path(universe_root, universe_symbols) if universe_symbols else None
+    )
+    universe_meta_path = (
+        resolve_snapshot_path(universe_root, universe_meta) if universe_meta else None
+    )
     intraday_dir = (
         resolve_snapshot_path(ASSETS_ROOT / "rqdata" / "hk" / "intraday", intraday_snapshot)
         if intraday_snapshot
@@ -480,23 +463,25 @@ def _resolve_assets(args: argparse.Namespace) -> dict[str, object]:
         )
 
     _validate_resolved_asset_paths(
-        daily_dir=daily_dir,
-        intraday_dir=intraday_dir,
-        etf_daily_dir=etf_daily_dir,
-        etf_instruments_path=etf_instruments_path,
-        valuation_dir=valuation_dir,
-        instruments_path=instruments_path,
-        pit_dir=pit_dir,
-        ex_factors_dir=ex_factors_dir,
-        dividends_dir=dividends_dir,
-        shares_dir=shares_dir,
-        exchange_rate_dir=exchange_rate_dir,
-        southbound_dir=southbound_dir,
-        financial_details_dir=financial_details_dir,
-        announcement_dir=announcement_dir,
-        industry_changes_dir=industry_changes_dir,
-        universe_by_date_path=universe_by_date_path,
-        universe_symbols_path=universe_symbols_path,
+        {
+            "Daily snapshot directory": daily_dir,
+            "Intraday snapshot directory": intraday_dir,
+            "ETF daily snapshot directory": etf_daily_dir,
+            "ETF instruments file": etf_instruments_path,
+            "Valuation snapshot directory": valuation_dir,
+            "Instruments file": instruments_path,
+            "PIT snapshot directory": pit_dir,
+            "Ex-factors snapshot directory": ex_factors_dir,
+            "Dividends snapshot directory": dividends_dir,
+            "Shares snapshot directory": shares_dir,
+            "Exchange-rate snapshot directory": exchange_rate_dir,
+            "Southbound snapshot directory": southbound_dir,
+            "Financial-details snapshot directory": financial_details_dir,
+            "Announcement snapshot directory": announcement_dir,
+            "Industry changes snapshot directory": industry_changes_dir,
+            "Universe by-date file": universe_by_date_path,
+            "Universe symbols file": universe_symbols_path,
+        }
     )
     if universe_meta_path and not universe_meta_path.exists():
         universe_meta_path = None
@@ -917,7 +902,9 @@ def _selected_parts(
         selected = [part for part in default_parts if part in available_parts]
     missing = [part for part in selected if part not in available_parts]
     if missing:
-        raise SystemExit(f"Requested parts are not available under the current preset/settings: {missing}")
+        raise SystemExit(
+            f"Requested parts are not available under the current preset/settings: {missing}"
+        )
     return selected
 
 
@@ -956,7 +943,9 @@ def _build_root_manifest(
             "source_repo": str(REPO_ROOT),
             "mode": mode,
             "preset": preset,
-            "current_contract_path": str(current_contract_path) if current_contract_path is not None else None,
+            "current_contract_path": (
+                str(current_contract_path) if current_contract_path is not None else None
+            ),
         },
         "parts": {},
     }
@@ -991,7 +980,9 @@ def _build_part_manifest(
             "source_repo": str(REPO_ROOT),
             "mode": mode,
             "preset": preset,
-            "current_contract_path": str(current_contract_path) if current_contract_path is not None else None,
+            "current_contract_path": (
+                str(current_contract_path) if current_contract_path is not None else None
+            ),
         },
         "part": {
             "name": part_name,
@@ -1003,12 +994,16 @@ def _build_part_manifest(
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Stage HK assets into multiple release parts.",
     )
     parser.add_argument("--preset", choices=sorted(PRESETS.keys()), default="hk_full")
-    parser.add_argument("--name", default=None, help="Distribution name used in manifests and tarballs.")
+    parser.add_argument(
+        "--name",
+        default=None,
+        help="Distribution name used in manifests and tarballs.",
+    )
     parser.add_argument("--dest", default=None, help="Destination staging root.")
     parser.add_argument("--mode", choices=["copy", "symlink"], default="copy")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite destination.")
@@ -1021,7 +1016,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Only stage selected part(s). Repeatable.",
     )
     parser.add_argument("--no-pit", action="store_true", help="Skip PIT assets.")
-    parser.add_argument("--no-reference", action="store_true", help="Skip reference assets (ex_factors/dividends/shares).")
+    parser.add_argument(
+        "--no-reference",
+        action="store_true",
+        help="Skip reference assets (ex_factors/dividends/shares).",
+    )
     parser.add_argument("--no-valuation", action="store_true", help="Skip valuation assets.")
     parser.add_argument("--as-of", dest="as_of", default=None)
     parser.add_argument("--daily-snapshot", default=None)
@@ -1042,10 +1041,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--universe-by-date", default=None)
     parser.add_argument("--universe-symbols", default=None)
     parser.add_argument("--universe-meta", default=None)
-    parser.add_argument("--no-exchange-rate", action="store_true", help="Skip exchange_rate assets.")
+    parser.add_argument(
+        "--no-exchange-rate",
+        action="store_true",
+        help="Skip exchange_rate assets.",
+    )
     parser.add_argument("--no-southbound", action="store_true", help="Skip southbound assets.")
     parser.add_argument("--no-intraday", action="store_true", help="Skip intraday assets.")
-    parser.add_argument("--no-etf", action="store_true", help="Skip ETF daily + ETF instruments assets.")
+    parser.add_argument(
+        "--no-etf",
+        action="store_true",
+        help="Skip ETF daily + ETF instruments assets.",
+    )
     parser.add_argument(
         "--no-financial-details",
         action="store_true",
@@ -1053,7 +1060,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--no-announcement", action="store_true", help="Skip announcement assets.")
     parser.add_argument("--no-industry", action="store_true", help="Skip industry_changes assets.")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
 
     preset = PRESETS[args.preset]
     default_parts = tuple(preset.get("default_parts") or DEFAULT_PART_CHOICES)
@@ -1068,7 +1079,7 @@ def main(argv: list[str] | None = None) -> int:
 
     part_specs = _build_part_specs(resolved)
     selected_parts = _selected_parts(args.part, part_specs, default_parts=default_parts)
-    generated_at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    generated_at = datetime.now(UTC).astimezone().isoformat(timespec="seconds")
 
     for part_name in selected_parts:
         spec = part_specs[part_name]

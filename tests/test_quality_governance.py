@@ -68,6 +68,18 @@ def test_quality_baseline_flags_protected_excludes_even_when_baselined() -> None
     assert any("protected paths must stay checked" in issue for issue in issues)
 
 
+def test_quality_baseline_flags_ruff_only_protected_excludes() -> None:
+    report = quality_debt._coverage_report()
+    baseline = json.loads(json.dumps(report))
+    protected = "src/market_data_platform/release_tools"
+    report["tools"]["ruff"]["excluded_patterns"].append(protected)
+    baseline["tools"]["ruff"]["excluded_patterns"].append(protected)
+
+    issues = quality_debt._coverage_issues(report, baseline)
+
+    assert any("protected paths must stay checked" in issue for issue in issues)
+
+
 def test_maintainability_metrics_collect_function_lengths_and_args(tmp_path: Path) -> None:
     source = tmp_path / "src"
     source.mkdir()

@@ -16,13 +16,29 @@ BASELINE_PATH = REPO_ROOT / "scripts" / "dev" / "quality_baseline.json"
 DEFAULT_RUFF_SELECT = "E,F,I,UP,B,C4,RET,RUF100"
 COMPLEXITY_RUFF_SELECT = "C90,PLR0911,PLR0912,PLR0913,PLR0915"
 BASELINE_VERSION = 1
-PROTECTED_INCLUDED_PATHS = (
+PYRIGHT_PROTECTED_INCLUDED_PATHS = (
     "src/market_data_platform/config_utils.py",
     "src/market_data_platform/data_provider_contracts.py",
     "src/market_data_platform/hk_depth/downloader.py",
+    "src/market_data_platform/pit_feature_stats.py",
+    "src/market_data_platform/rebalance.py",
     "src/market_data_platform/rqdata_cli_common.py",
     "src/market_data_platform/symbols.py",
 )
+RUFF_PROTECTED_INCLUDED_PATHS = (
+    *PYRIGHT_PROTECTED_INCLUDED_PATHS,
+    "src/market_data_platform/data_providers.py",
+    "src/market_data_platform/data_warehouse.py",
+    "src/market_data_platform/release_tools",
+    "src/market_data_platform/rqdata_runtime.py",
+)
+PROTECTED_INCLUDED_PATHS_BY_TOOL = {
+    "ruff": RUFF_PROTECTED_INCLUDED_PATHS,
+    "pyright": PYRIGHT_PROTECTED_INCLUDED_PATHS,
+}
+# Backward-compatible alias for tests and external callers that only need the
+# stricter shared boundary set.
+PROTECTED_INCLUDED_PATHS = PYRIGHT_PROTECTED_INCLUDED_PATHS
 
 
 def _python_files(src_root: Path = SRC_ROOT) -> list[Path]:
@@ -139,15 +155,18 @@ def _coverage_issues(
 
         current_excludes = set(current.get("excluded_patterns") or [])
         expected_excludes = set(expected.get("excluded_patterns") or [])
+        protected_paths = PROTECTED_INCLUDED_PATHS_BY_TOOL.get(
+            tool_name,
+            PROTECTED_INCLUDED_PATHS,
+        )
         protected_excludes = sorted(
             path
-            for path in PROTECTED_INCLUDED_PATHS
+            for path in protected_paths
             if any(_pattern_excludes_path(path, pattern) for pattern in current_excludes)
         )
         if protected_excludes:
             issues.append(
-                f"{tool_name}: protected paths must stay checked: "
-                f"{', '.join(protected_excludes)}"
+                f"{tool_name}: protected paths must stay checked: {', '.join(protected_excludes)}"
             )
 
         added_excludes = sorted(current_excludes - expected_excludes)
