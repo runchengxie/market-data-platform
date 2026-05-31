@@ -138,3 +138,39 @@ def test_validate_a_share_daily_clean_reports_required_overlay_columns(tmp_path)
     assert summary["status"] == "failed"
     assert "pe_ttm" in summary["errors"][0]
     assert "up_limit" in summary["errors"][0]
+
+
+def test_build_a_share_daily_clean_falls_back_to_raw_prices_without_adj_factor(tmp_path):
+    pd = __import__("pandas")
+    daily_dir = tmp_path / "raw_daily"
+    out_dir = tmp_path / "daily_clean"
+
+    _write_part(
+        pd.DataFrame(
+            {
+                "ts_code": ["600519.SH"],
+                "trade_date": ["20260522"],
+                "open": [100.0],
+                "high": [110.0],
+                "low": [99.0],
+                "close": [108.0],
+                "pre_close": [100.0],
+                "vol": [1000.0],
+                "amount": [108000.0],
+            }
+        ),
+        daily_dir,
+        "20260522",
+    )
+
+    manifest = build_a_share_daily_clean(
+        daily_dir=daily_dir,
+        out_dir=out_dir,
+        min_rows=1,
+        min_symbols=1,
+    )
+
+    output = pd.read_parquet(out_dir / "data" / "600519.SH.parquet")
+    assert manifest["quality"]["missing_tr_close"] == 0
+    assert output.loc[0, "tr_close"] == 108.0
+    assert output.loc[0, "adjustment_source"] == "raw_unadjusted"

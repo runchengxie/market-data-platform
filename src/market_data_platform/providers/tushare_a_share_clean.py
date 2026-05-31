@@ -176,11 +176,13 @@ def _merge_adjustment_columns(
     adj_factor_dir: str | Path | None,
 ) -> pd.DataFrame:
     out = frame
+    has_adj_factor_input = False
     if adj_factor_dir is not None:
         adj = _prepare_index_frame(
             _read_parquet_parts(adj_factor_dir, label="adj_factor"), label="adj_factor"
         )
         if not adj.empty and "adj_factor" in adj.columns:
+            has_adj_factor_input = True
             adj["adj_factor"] = pd.to_numeric(adj["adj_factor"], errors="coerce")
             adj = adj.drop_duplicates(subset=["symbol", "trade_date"], keep="last")
             out = out.merge(
@@ -191,12 +193,16 @@ def _merge_adjustment_columns(
     if "adj_factor" not in out.columns:
         out["adj_factor"] = pd.NA
     out["adj_factor"] = pd.to_numeric(out["adj_factor"], errors="coerce")
-    latest_factor = out.groupby("symbol")["adj_factor"].transform("last")
-    factor_ratio = out["adj_factor"] / latest_factor
+    if has_adj_factor_input:
+        latest_factor = out.groupby("symbol")["adj_factor"].transform("last")
+        factor_ratio = out["adj_factor"] / latest_factor
+    else:
+        factor_ratio = pd.Series(1.0, index=out.index, dtype="float64")
     for column in PRICE_COLUMNS:
         if column in out.columns:
             out[f"adj_{column}"] = pd.to_numeric(out[column], errors="coerce") * factor_ratio
     out["tr_close"] = out["adj_close"] if "adj_close" in out.columns else out.get("close")
+    out["adjustment_source"] = "adj_factor" if has_adj_factor_input else "raw_unadjusted"
     return out
 
 
@@ -303,6 +309,8 @@ def _build_daily_clean_manifest(
 ) -> dict[str, Any]:
     duplicate_rows = int(frame.duplicated(subset=["symbol", "trade_date"]).sum())
     missing_tr_close = int(frame["tr_close"].isna().sum()) if "tr_close" in frame.columns else rows
+    start_date = str(frame["trade_date"].min()) if "trade_date" in frame.columns and rows else None
+    end_date = str(frame["trade_date"].max()) if "trade_date" in frame.columns and rows else None
     return {
         "schema_version": "tushare.a_share.daily_clean.v1",
         "dataset": "daily_clean",
@@ -310,6 +318,11 @@ def _build_daily_clean_manifest(
         "provider": "tushare",
         "status": "completed",
         "output_dir": str(output_dir),
+        "query": {
+            "start_date": start_date,
+            "end_date": end_date,
+            "partition_by": "symbol",
+        },
         "inputs": {
             "daily_dir": str(Path(inputs.daily_dir).expanduser().resolve()),
             "adj_factor_dir": _resolved_optional_path(inputs.adj_factor_dir),
