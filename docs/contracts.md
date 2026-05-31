@@ -53,6 +53,18 @@ marketdata contract build \
 默认情况下，该命令会同时合并已存在的中国香港市场 / 中国大陆市场 current contracts 生成
 `metadata/dataset_registry.csv`。如只需写入 JSON 契约，可加 `--no-registry`。
 
+也可以用市场通用检查入口查看 contract 是否存在、资产 alias 是否缺失、以及各资产
+`as_of` 是否落后于目标日期：
+
+```bash
+marketdata contract inspect \
+  --market a_share \
+  --provider tushare \
+  --artifacts-root "$DATA_PLATFORM_ROOT" \
+  --target-date 20260109 \
+  --fail-on-severity error
+```
+
 ## 数据资产键名
 
 | 资产键名 (Asset key) | 产物根目录下的默认路径 |
@@ -99,6 +111,8 @@ marketdata contract build \
 
 不传 `--provider` 的中国大陆市场 contract 继续使用原有 `rqdata` 布局。单个
 `a_share_current.json` 只表示当前采纳的 provider，不汇总多个 provider 的 raw 快照。
+如果只迁入了小样本，仍应使用 canonical `a_share_current.json` 作为下游入口，但 health
+报告需要明确列出尚未生产的 `adj_factor`、`limit_status`、`daily_clean` 等资产。
 
 ## 数据集注册表 (Dataset Registry)
 

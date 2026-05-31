@@ -81,6 +81,15 @@ marketdata contract build --market a_share --provider tushare \
   --artifacts-root "$DATA_PLATFORM_ROOT" --target-date 20260526
 ```
 
+发布后可用通用 current contract 检查入口生成机器可读报告：
+
+```bash
+marketdata contract inspect --market a_share --provider tushare \
+  --artifacts-root "$DATA_PLATFORM_ROOT" --target-date 20260526 \
+  --fail-on-severity error --format json \
+  --out "$DATA_PLATFORM_ROOT/reports/a_share_current_health_20260526.json"
+```
+
 `marketdata tushare mirror-a-share-limit-status` 可镜像 `stk_limit` 接口形成 `limit_status` raw 资产。当前 MVP 范围包含 raw layer 采集和 contract 发布入口，clean layer、修复、质量门禁与发布打包仍需后续补齐。
 
 ## 中国香港市场 current refresh

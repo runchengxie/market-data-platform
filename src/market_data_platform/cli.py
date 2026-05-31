@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Any, cast
 
 from market_data_platform.contract import build_current_contract, write_current_contract
+from market_data_platform.contract_health import (
+    current_contract_health_exit_code,
+    inspect_current_contract,
+    write_current_contract_health_report,
+)
 from market_data_platform.deprecations import warn_deprecated_command
 from market_data_platform.hk_workflows import (
     HK_INSPECT_ASSET_CHOICES,
@@ -122,6 +127,28 @@ def _add_contract_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Print contract JSON without writing it.",
     )
+    inspect = contract_subparsers.add_parser(
+        "inspect",
+        help="Inspect a current contract for missing assets and stale as-of dates.",
+    )
+    inspect.add_argument("--artifacts-root")
+    inspect.add_argument("--market", default="hk", choices=MARKET_CHOICES)
+    inspect.add_argument("--provider", choices=PROVIDER_CHOICES)
+    inspect.add_argument("--current-contract")
+    inspect.add_argument("--target-date")
+    inspect.add_argument(
+        "--asset",
+        action="append",
+        default=[],
+        help="Only inspect selected asset key(s). Repeatable.",
+    )
+    inspect.add_argument(
+        "--fail-on-severity",
+        choices=("none", "info", "warning", "error"),
+        default="none",
+    )
+    inspect.add_argument("--out")
+    inspect.add_argument("--format", choices=("text", "json"), default="text")
 
 
 def _add_registry_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -625,6 +652,24 @@ def _handle_contract_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_contract_inspect(args: argparse.Namespace) -> int:
+    payload = inspect_current_contract(
+        args.artifacts_root,
+        market=args.market,
+        provider=args.provider,
+        current_contract=args.current_contract,
+        target_date=args.target_date,
+        assets=args.asset,
+        fail_on_severity=args.fail_on_severity,
+    )
+    write_current_contract_health_report(
+        payload,
+        output=args.out,
+        output_format=args.format,
+    )
+    return current_contract_health_exit_code(payload)
+
+
 def _handle_registry_build(args: argparse.Namespace) -> int:
     root = resolve_artifacts_root(args.artifacts_root)
     output = dataset_registry_path(root)
@@ -943,6 +988,8 @@ def main(argv: list[str] | None = None) -> int:
         return _handle_paths(args)
     if args.command == "contract" and args.contract_command == "build":
         return _handle_contract_build(args)
+    if args.command == "contract" and args.contract_command == "inspect":
+        return _handle_contract_inspect(args)
     if args.command == "registry" and args.registry_command == "build":
         return _handle_registry_build(args)
     if args.command == "data":

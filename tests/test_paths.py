@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 
 import pytest
@@ -340,3 +341,67 @@ def test_cli_registry_build_combines_existing_market_contracts(tmp_path):
     registry_text = dataset_registry_path(root).read_text(encoding="utf-8")
     assert "hk_current_contract" in registry_text
     assert "a_share_current_contract" in registry_text
+
+
+def test_cli_contract_inspect_reports_missing_a_share_tushare_assets(tmp_path, capsys):
+    root = tmp_path / "market-data"
+    assets = candidate_asset_paths(root, market="a_share", provider="tushare")
+    snapshot = root / "assets" / "tushare" / "a_share" / "daily" / "a_share_all_20260522_daily"
+    snapshot.mkdir(parents=True)
+    (snapshot / "manifest.yml").write_text(
+        "\n".join(
+            [
+                "dataset: daily",
+                "provider: tushare",
+                "status: completed",
+                "query:",
+                "  start_date: '20260521'",
+                "  end_date: '20260522'",
+                "totals:",
+                "  rows: 10",
+                "  symbols: 5",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assets["daily"].parent.mkdir(parents=True, exist_ok=True)
+    assets["daily"].symlink_to(snapshot.name)
+    contract = build_current_contract(
+        root,
+        market="a_share",
+        provider="tushare",
+        target_date="20260522",
+    )
+    write_current_contract(current_contract_path(root, market="a_share"), contract)
+
+    result = main(
+        [
+            "contract",
+            "inspect",
+            "--artifacts-root",
+            str(root),
+            "--market",
+            "a_share",
+            "--provider",
+            "tushare",
+            "--target-date",
+            "20260522",
+            "--asset",
+            "daily",
+            "--asset",
+            "adj_factor",
+            "--format",
+            "json",
+            "--fail-on-severity",
+            "error",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert result == 0
+    assert payload["summary"]["missing_assets"] == 1
+    assert payload["summary"]["stale_assets"] == 0
+    assert payload["quality_verdict"]["overall_severity"] == "warning"
+    assert payload["quality_verdict"]["gate_status"] == "pass"
+    assert payload["assets"]["daily"]["exists"] is True
+    assert payload["assets"]["adj_factor"]["exists"] is False
